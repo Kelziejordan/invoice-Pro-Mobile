@@ -1,4 +1,3 @@
-// filepath: src/components/ui/Label.tsx
 import React from 'react';
 import { cn } from '../../utils/cn';
 
@@ -10,7 +9,7 @@ export const Label = React.forwardRef<HTMLLabelElement, LabelProps>(
       <label
         ref={ref}
         className={cn(
-          'text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 text-slate-700',
+          'text-sm font-semibold leading-none text-slate-900 peer-disabled:cursor-not-allowed peer-disabled:opacity-70',
           className
         )}
         {...props}

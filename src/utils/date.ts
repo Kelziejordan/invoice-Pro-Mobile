@@ -1,11 +1,18 @@
-// filepath: src/utils/date.ts
-export function formatDate(dateString: string | Date): string {
-  const date = typeof dateString === 'string' ? new Date(dateString) : dateString;
-  return new Intl.DateTimeFormat('en-US', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-  }).format(date);
+export function formatDate(dateString: string): string {
+  if (!dateString) return '';
+  try {
+    const date = new Date(dateString);
+    // Ensure valid date
+    if (isNaN(date.getTime())) return dateString;
+    
+    return new Intl.DateTimeFormat('en-US', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+    }).format(date);
+  } catch (e) {
+    return dateString;
+  }
 }
 
 export function getTodayISODate(): string {

@@ -18,7 +18,7 @@ export function Dashboard({ invoices, onNewInvoice, onEditInvoice, onDeleteInvoi
   if (invoices.length === 0) {
     return (
       <div className="w-full max-w-4xl mx-auto flex flex-col items-center justify-center py-20 text-center">
-        <div className="w-20 h-20 bg-indigo-50 text-indigo-500 rounded-full flex items-center justify-center mb-6">
+        <div className="w-20 h-20 bg-indigo-50 text-indigo-500 rounded-full flex items-center justify-center mb-6" aria-hidden="true">
           <FileText className="w-10 h-10" />
         </div>
         <h2 className="text-2xl font-bold text-slate-900 mb-2">No invoices yet</h2>
@@ -26,7 +26,7 @@ export function Dashboard({ invoices, onNewInvoice, onEditInvoice, onDeleteInvoi
           Create your first professional invoice in seconds using our AI-powered wizard.
         </p>
         <Button onClick={onNewInvoice} size="lg">
-          <Plus className="w-5 h-5 mr-2" />
+          <Plus className="w-5 h-5 mr-2" aria-hidden="true" />
           Create First Invoice
         </Button>
       </div>
@@ -41,7 +41,7 @@ export function Dashboard({ invoices, onNewInvoice, onEditInvoice, onDeleteInvoi
           <p className="text-slate-500">Manage and track your past invoices.</p>
         </div>
         <Button onClick={onNewInvoice}>
-          <Plus className="w-4 h-4 mr-2" />
+          <Plus className="w-4 h-4 mr-2" aria-hidden="true" />
           New Invoice
         </Button>
       </div>
@@ -85,16 +85,20 @@ export function Dashboard({ invoices, onNewInvoice, onEditInvoice, onDeleteInvoi
                   size="sm" 
                   className="flex-1 bg-white"
                   onClick={() => onEditInvoice(invoice)}
+                  aria-label={`Edit invoice ${invoice.invoiceNumber}`}
                 >
-                  <Edit className="w-4 h-4 mr-2" /> View / Edit
+                  <Edit className="w-4 h-4 mr-2" aria-hidden="true" /> View / Edit
                 </Button>
                 <Button 
                   variant="outline" 
                   size="sm" 
                   className="bg-white text-red-600 hover:bg-red-50 hover:text-red-700 border-slate-200"
-                  onClick={() => onDeleteInvoice(invoice.id!)}
+                  onClick={() => {
+                    if (invoice.id) onDeleteInvoice(invoice.id);
+                  }}
+                  aria-label={`Delete invoice ${invoice.invoiceNumber}`}
                 >
-                  <Trash2 className="w-4 h-4" />
+                  <Trash2 className="w-4 h-4" aria-hidden="true" />
                 </Button>
               </div>
             </Card>

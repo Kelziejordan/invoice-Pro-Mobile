@@ -1,3 +1,8 @@
+/**
+ * @license
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 import React, { useState } from 'react';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { useInvoiceWizard } from './hooks/useInvoiceWizard';
@@ -50,13 +55,17 @@ function WizardApp() {
 
   const handleSaveInvoice = () => {
     saveInvoice(wizard.getFullInvoice());
-    wizard.incrementInvoiceSequence(); // Increment sequence for next time
-    wizard.clearDraft(); // Clear the draft since it's saved
     setView('dashboard');
   };
 
   const handleEditInvoice = (invoice: Invoice) => {
-    wizard.loadInvoice(invoice);
+    wizard.setProfile(invoice.profile);
+    wizard.setClient(invoice.client);
+    wizard.setItems(invoice.items);
+    wizard.setInvoiceNumber(invoice.invoiceNumber);
+    wizard.setDate(invoice.date);
+    wizard.setDueDate(invoice.dueDate);
+    wizard.setStep('review');
     setView('wizard');
   };
 
@@ -66,18 +75,14 @@ function WizardApp() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col print:bg-white print:block bg-slate-50">
+    <div className="min-h-screen flex flex-col print:bg-white print:block">
       {/* Header (Hidden in print) */}
       <header className="bg-white border-b border-slate-200 sticky top-0 z-10 print:hidden">
         <div className="max-w-5xl mx-auto px-4 h-16 flex items-center justify-between">
-          <button 
-            className="flex items-center gap-2 text-indigo-600 font-bold text-xl cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 rounded-lg p-1" 
-            onClick={() => setView('dashboard')}
-            aria-label="Go to Dashboard"
-          >
-            <FileText className="w-6 h-6" aria-hidden="true" />
+          <div className="flex items-center gap-2 text-indigo-600 font-bold text-xl cursor-pointer" onClick={() => setView('dashboard')}>
+            <FileText className="w-6 h-6" />
             <span>Invoice Pro</span>
-          </button>
+          </div>
           
           <div className="flex items-center gap-2">
             {view === 'wizard' && wizard.step !== 'review' && (
@@ -87,7 +92,7 @@ function WizardApp() {
                 onClick={() => setIsAIModalOpen(true)}
                 className="text-indigo-600 border-indigo-200 hover:bg-indigo-50"
               >
-                <Wand2 className="w-4 h-4 mr-2" aria-hidden="true" />
+                <Wand2 className="w-4 h-4 mr-2" />
                 <span className="hidden sm:inline">Magic Wand</span>
               </Button>
             )}
@@ -98,7 +103,7 @@ function WizardApp() {
                 onClick={() => setView('dashboard')}
                 className="text-slate-600 border-slate-200 hover:bg-slate-50"
               >
-                <LayoutDashboard className="w-4 h-4 mr-2" aria-hidden="true" />
+                <LayoutDashboard className="w-4 h-4 mr-2" />
                 <span className="hidden sm:inline">Dashboard</span>
               </Button>
             )}
@@ -110,12 +115,11 @@ function WizardApp() {
       {view === 'wizard' && wizard.step !== 'review' && (
         <div className="bg-white border-b border-slate-100 print:hidden">
           <div className="max-w-5xl mx-auto px-4 py-4">
-            <div className="flex items-center justify-between max-w-md mx-auto relative" aria-label="Progress">
-              <div className="absolute left-0 top-1/2 -translate-y-1/2 w-full h-1 bg-slate-100 -z-10 rounded-full" aria-hidden="true"></div>
+            <div className="flex items-center justify-between max-w-md mx-auto relative">
+              <div className="absolute left-0 top-1/2 -translate-y-1/2 w-full h-1 bg-slate-100 -z-10 rounded-full"></div>
               <div 
                 className="absolute left-0 top-1/2 -translate-y-1/2 h-1 bg-indigo-600 -z-10 rounded-full transition-all duration-300"
                 style={{ width: `${(currentStepIndex / (steps.length - 2)) * 100}%` }}
-                aria-hidden="true"
               ></div>
               
               {steps.slice(0, 3).map((s, i) => {
@@ -123,13 +127,13 @@ function WizardApp() {
                 const isCurrent = currentStepIndex === i;
                 
                 return (
-                  <div key={s.id} className="flex flex-col items-center gap-2 bg-white px-2" aria-current={isCurrent ? 'step' : undefined}>
+                  <div key={s.id} className="flex flex-col items-center gap-2 bg-white px-2">
                     <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold transition-colors ${
                       isCompleted ? 'bg-indigo-600 text-white' : 
                       isCurrent ? 'bg-indigo-100 text-indigo-700 border-2 border-indigo-600' : 
                       'bg-slate-100 text-slate-400'
                     }`}>
-                      {isCompleted ? <CheckCircle2 className="w-5 h-5" aria-hidden="true" /> : i + 1}
+                      {isCompleted ? <CheckCircle2 className="w-5 h-5" /> : i + 1}
                     </div>
                     <span className={`text-xs font-medium ${isCurrent ? 'text-indigo-700' : 'text-slate-500'}`}>
                       {s.label}

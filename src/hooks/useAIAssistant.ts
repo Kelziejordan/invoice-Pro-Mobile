@@ -1,15 +1,28 @@
-// filepath: src/hooks/useAIAssistant.ts
-import { useState, useCallback, useRef } from 'react';
-import { GoogleGenAI, Type } from '@google/genai';
-import { RemoteData } from '../types/remote-data';
-import { AIInvoiceExtractionSchema, AIInvoiceExtraction } from '../schemas/invoice.schema';
+import { useState, useRef, useEffect, useCallback } from 'react';
+import { GoogleGenAI, Type, Schema } from '@google/genai';
+import { RemoteData, remoteIdle, remoteLoading, remoteSuccess, remoteError } from '../types/remote-data';
+import { AIInvoiceExtraction, AIInvoiceExtractionSchema } from '../schemas/invoice.schema';
+
+// Initialize the Gemini API client
+// Note: In a real production app, this should ideally be called from a backend to protect the API key.
+// For this local-first SPA, we rely on the environment variable injected by the build process.
+const ai = new GoogleGenAI({ apiKey: import.meta.env.VITE_GEMINI_API_KEY || process.env.GEMINI_API_KEY || '' });
 
 export function useAIAssistant() {
-  const [state, setState] = useState<RemoteData<AIInvoiceExtraction>>(RemoteData.idle());
+  const [state, setState] = useState<RemoteData<AIInvoiceExtraction>>(remoteIdle());
   const abortControllerRef = useRef<AbortController | null>(null);
 
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+    };
+  }, []);
+
   const extractInvoiceData = useCallback(async (prompt: string) => {
-    // Abort previous request if in-flight
+    // Abort any in-flight requests
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
     }
@@ -17,80 +30,68 @@ export function useAIAssistant() {
     const abortController = new AbortController();
     abortControllerRef.current = abortController;
 
-    setState(RemoteData.loading());
+    setState(remoteLoading());
 
     try {
-      const apiKey = process.env.GEMINI_API_KEY;
-      if (!apiKey) {
-        throw new Error('Gemini API key is missing.');
-      }
-
-      const ai = new GoogleGenAI({ apiKey });
-
-      // Build the prompt instruction
-      const systemInstruction = `
-        You are an expert invoice data extractor. 
-        Extract the client name, client address, tax rate (as a percentage number, e.g., 10 for 10%), and a list of line items from the user's natural language input.
-        Each line item should have a description, quantity, unitPrice, and optionally 'details' (which are comments or scope of work).
-        If a quantity is not specified, assume 1.
-        If a unit price is not specified, try to infer it or leave it as 0.
-      `;
-
-      // The Gemini API call (we simulate passing the signal if the SDK doesn't natively support it, 
-      // but we check signal.aborted after the await)
-      const response = await ai.models.generateContent({
-        model: 'gemini-3-flash-preview',
-        contents: prompt,
-        config: {
-          systemInstruction,
-          responseMimeType: 'application/json',
-          responseSchema: {
-            type: Type.OBJECT,
-            properties: {
-              clientName: { type: Type.STRING },
-              clientAddress: { type: Type.STRING },
-              taxRate: { type: Type.NUMBER },
-              items: {
-                type: Type.ARRAY,
-                items: {
-                  type: Type.OBJECT,
-                  properties: {
-                    description: { type: Type.STRING },
-                    details: { type: Type.STRING },
-                    quantity: { type: Type.NUMBER },
-                    unitPrice: { type: Type.NUMBER },
-                  },
-                  required: ['description', 'quantity', 'unitPrice'],
-                },
+      // Define the expected schema for the Gemini API
+      const responseSchema: Schema = {
+        type: Type.OBJECT,
+        properties: {
+          clientName: { type: Type.STRING, description: "The name of the client or customer." },
+          clientAddress: { type: Type.STRING, description: "The physical address of the client." },
+          taxRate: { type: Type.NUMBER, description: "The tax rate percentage to apply (e.g., 5 for 5%). Return 0 if not mentioned." },
+          items: {
+            type: Type.ARRAY,
+            description: "The list of services or products provided.",
+            items: {
+              type: Type.OBJECT,
+              properties: {
+                description: { type: Type.STRING, description: "Short title of the service/product." },
+                details: { type: Type.STRING, description: "Additional details or scope of work." },
+                quantity: { type: Type.NUMBER, description: "Quantity or hours. Default to 1 if not specified." },
+                unitPrice: { type: Type.NUMBER, description: "Price per unit or total price if quantity is 1." }
               },
-            },
-            required: ['clientName', 'items'],
-          },
-        },
+              required: ["description", "quantity", "unitPrice"]
+            }
+          }
+        }
+      };
+
+      const response = await ai.models.generateContent({
+        model: 'gemini-3.1-flash-preview',
+        contents: `Extract invoice details from the following text. If a detail is missing, omit it or use logical defaults (like 1 for quantity).\n\nText: "${prompt}"`,
+        config: {
+          responseMimeType: 'application/json',
+          responseSchema: responseSchema,
+          systemInstruction: "You are a highly accurate data extraction assistant for an invoicing application. Extract the requested fields strictly based on the user's input.",
+        }
       });
 
-      if (abortController.signal.aborted) {
-        return; // Ignore if aborted
+      // Check if aborted before updating state
+      if (abortController.signal.aborted) return;
+
+      const responseText = response.text;
+      if (!responseText) {
+        throw new Error("Received empty response from AI.");
       }
 
-      const jsonStr = response.text?.trim() || '{}';
-      const parsedJson = JSON.parse(jsonStr);
+      const parsedJson = JSON.parse(responseText);
       
-      // Strict validation boundary
+      // Mandate 8: Zero-Trust Data Boundaries (Validate AI output)
       const validationResult = AIInvoiceExtractionSchema.safeParse(parsedJson);
 
       if (!validationResult.success) {
-        throw new Error('AI returned malformed data that failed schema validation.');
+        console.error("AI Data Validation Failed:", validationResult.error);
+        throw new Error("The AI returned data in an invalid format.");
       }
 
-      setState(RemoteData.success(validationResult.data));
-    } catch (error: any) {
-      if (error.name === 'AbortError' || abortController.signal.aborted) {
-        console.log('AI request aborted');
-        return;
-      }
-      console.error('AI Extraction Error:', error);
-      setState(RemoteData.error(error instanceof Error ? error : new Error(String(error))));
+      setState(remoteSuccess(validationResult.data));
+
+    } catch (error: unknown) {
+      if (abortController.signal.aborted) return;
+      
+      const errorMessage = error instanceof Error ? error.message : "An unknown error occurred during AI extraction.";
+      setState(remoteError(new Error(errorMessage), { originalError: error }));
     }
   }, []);
 
@@ -98,8 +99,12 @@ export function useAIAssistant() {
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
     }
-    setState(RemoteData.idle());
+    setState(remoteIdle());
   }, []);
 
-  return { state, extractInvoiceData, reset };
+  return {
+    state,
+    extractInvoiceData,
+    reset
+  };
 }

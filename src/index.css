@@ -10,37 +10,14 @@
   }
 }
 
+/* Print specific styles */
 @media print {
   body {
-    @apply bg-white text-black m-0 p-0;
+    background-color: white !important;
   }
   
-  /* Hide everything except the printable area */
-  body * {
-    visibility: hidden;
-  }
-  
-  .print\:visible, .print\:visible * {
-    visibility: visible;
-  }
-  
-  .print\:visible {
-    position: absolute;
-    left: 0;
-    top: 0;
-    width: 100%;
-    margin: 0;
-    padding: 0;
-  }
-
-  /* Ensure background colors and borders print correctly */
-  * {
-    -webkit-print-color-adjust: exact !important;
-    print-color-adjust: exact !important;
-  }
-
   @page {
-    margin: 0.5cm;
-    size: A4 portrait;
+    margin: 0;
+    size: auto;
   }
 }
