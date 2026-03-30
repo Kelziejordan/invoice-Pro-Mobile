@@ -1,0 +1,18 @@
+{
+  "name": "Invoice Pro",
+  "short_name": "Invoice Pro",
+  "description": "Professional invoice generator with AI audit",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#faf8f5",
+  "theme_color": "#1c1917",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' fill='%231c1917' rx='20'/><text y='.9em' font-size='70' x='12'>📄</text></svg>",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
