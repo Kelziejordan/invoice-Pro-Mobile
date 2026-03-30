@@ -1,17 +1,920 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-    <meta name="theme-color" content="#4f46e5" />
-    <meta name="description" content="Professional Invoice Generator" />
-    <link rel="icon" type="image/svg+xml" href="/icon.svg" />
-    <link rel="apple-touch-icon" href="/icon.svg" />
-    <title>Invoice Pro</title>
-  </head>
-  <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.tsx"></script>
-  </body>
-</html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="theme-color" content="#1c1917">
+  <title>Invoice Pro</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700&family=DM+Sans:ital,wght@0,300;0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+  <style>
+    * { -webkit-tap-highlight-color: transparent; box-sizing: border-box; }
+    body { font-family: 'DM Sans', sans-serif; background: #faf8f5; color: #1c1917; overscroll-behavior: none; }
+    .serif { font-family: 'Playfair Display', serif; }
+    .step-card { animation: slideIn 0.25s ease forwards; }
+    @keyframes slideIn { from { opacity:0; transform:translateY(14px); } to { opacity:1; transform:translateY(0); } }
+    input, textarea, select {
+      font-family: 'DM Sans', sans-serif;
+      -webkit-appearance: none;
+      appearance: none;
+      background: #fff;
+      border: 1.5px solid #e7e5e4;
+      border-radius: 10px;
+      padding: 13px 14px;
+      font-size: 15px;
+      width: 100%;
+      color: #1c1917;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+    input:focus, textarea:focus, select:focus { border-color: #d97706; box-shadow: 0 0 0 3px rgba(217,119,6,0.12); }
+    label { display: block; font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: #78716c; margin-bottom: 6px; }
+    .btn-primary {
+      background: #d97706; color: #fff; border: none; border-radius: 12px;
+      padding: 15px 28px; font-size: 15px; font-weight: 600; font-family: 'DM Sans', sans-serif;
+      cursor: pointer; width: 100%; transition: background 0.15s, transform 0.1s;
+      display: flex; align-items: center; justify-content: center; gap: 8px;
+    }
+    .btn-primary:active { background: #b45309; transform: scale(0.98); }
+    .btn-primary:disabled { background: #d6d3d1; cursor: not-allowed; }
+    .btn-secondary {
+      background: transparent; color: #78716c; border: 1.5px solid #d6d3d1; border-radius: 12px;
+      padding: 14px 24px; font-size: 15px; font-weight: 500; font-family: 'DM Sans', sans-serif;
+      cursor: pointer; transition: border-color 0.15s, color 0.15s;
+    }
+    .btn-secondary:active { border-color: #a8a29e; color: #44403c; }
+    .card { background: #fff; border-radius: 16px; border: 1px solid #e7e5e4; padding: 20px; }
+    .field-group { margin-bottom: 16px; }
+    .audit-ready { background: #f0fdf4; border: 1.5px solid #86efac; border-radius: 12px; padding: 16px; }
+    .audit-warn { background: #fffbeb; border: 1.5px solid #fcd34d; border-radius: 12px; padding: 16px; }
+    .audit-error { background: #fef2f2; border: 1.5px solid #fca5a5; border-radius: 12px; padding: 16px; }
+    .audit-loading { background: #f1f5f9; border: 1.5px solid #cbd5e1; border-radius: 12px; padding: 16px; }
+    .item-row { background: #faf8f5; border-radius: 10px; padding: 14px; margin-bottom: 10px; border: 1px solid #e7e5e4; }
+    .overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 50; display: flex; align-items: flex-end; justify-content: center; }
+    .modal { background: #fff; border-radius: 20px 20px 0 0; padding: 28px 20px; width: 100%; max-width: 480px; }
+    ::-webkit-scrollbar { display: none; }
+    .preview-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    .preview-table th { background: #1c1917; color: #fff; padding: 7px 8px; text-align: left; font-weight: 600; letter-spacing: 0.04em; }
+    .preview-table td { padding: 7px 8px; border-bottom: 1px solid #f5f5f4; }
+    .preview-table tr:last-child td { border-bottom: none; }
+  </style>
+</head>
+<body>
+<div id="root"></div>
 
+<script>
+// ============================================================
+// UTILITIES
+// ============================================================
+const uid = () => Math.random().toString(36).slice(2, 8);
+const today = () => new Date().toISOString().slice(0, 10);
+const due14 = () => new Date(Date.now() + 14*24*60*60*1000).toISOString().slice(0, 10);
+const fmt = n => Number(n || 0).toFixed(2);
+const esc = s => String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+
+function getNextNum() {
+  const n = parseInt(localStorage.getItem('inv_counter') || '0') + 1;
+  localStorage.setItem('inv_counter', n);
+  return 'INV-' + String(n).padStart(3, '0');
+}
+
+// ============================================================
+// STATE
+// ============================================================
+function freshInvoice() {
+  const profile = JSON.parse(localStorage.getItem('inv_profile') || '{}');
+  return {
+    number: getNextNum(),
+    date: today(),
+    dueDate: due14(),
+    currency: '$',
+    taxName: 'GST',
+    taxRate: 5,
+    discount: 0,
+    notes: 'Thank you for your business!',
+    terms: 'Payment due within 14 days.',
+    company: {
+      name: profile.name || '',
+      address: profile.address || '',
+      city: profile.city || '',
+      phone: profile.phone || '',
+      email: profile.email || '',
+      gst: profile.gst || '',
+      logo: profile.logo || ''
+    },
+    client: { name: '', address: '', city: '', phone: '', email: '' },
+    items: [{ id: uid(), desc: '', qty: 1, price: 0 }]
+  };
+}
+
+let S = {
+  step: 1,
+  inv: JSON.parse(localStorage.getItem('inv_draft') || 'null') || freshInvoice(),
+  audit: null,
+  auditing: false,
+  showApiModal: false,
+  showResetConfirm: false,
+};
+
+// ============================================================
+// CALCULATIONS
+// ============================================================
+const subtotal = inv => inv.items.reduce((s, i) => s + (Number(i.qty||0) * Number(i.price||0)), 0);
+const discountAmt = inv => subtotal(inv) * (Number(inv.discount||0) / 100);
+const taxAmt = inv => (subtotal(inv) - discountAmt(inv)) * (Number(inv.taxRate||0) / 100);
+const total = inv => subtotal(inv) - discountAmt(inv) + taxAmt(inv);
+
+// ============================================================
+// STORAGE
+// ============================================================
+function saveDraft() {
+  localStorage.setItem('inv_draft', JSON.stringify(S.inv));
+}
+function saveProfile() {
+  const c = S.inv.company;
+  const profile = { name:c.name, address:c.address, city:c.city, phone:c.phone, email:c.email, gst:c.gst, logo:c.logo };
+  localStorage.setItem('inv_profile', JSON.stringify(profile));
+}
+
+// ============================================================
+// RENDER
+// ============================================================
+function render() {
+  document.getElementById('root').innerHTML =
+    renderHeader() +
+    `<div style="max-width:480px;margin:0 auto;padding:0 16px 120px;">` +
+      renderStepper() +
+      `<div class="step-card">` +
+        (S.step===1 ? renderStep1() :
+         S.step===2 ? renderStep2() :
+         S.step===3 ? renderStep3() :
+         renderStep4()) +
+      `</div>` +
+    `</div>` +
+    renderNav() +
+    (S.showApiModal ? renderApiModal() : '') +
+    (S.showResetConfirm ? renderResetModal() : '');
+  bind();
+}
+
+function renderHeader() {
+  return `
+    <header style="background:#1c1917;padding:18px 20px 16px;position:sticky;top:0;z-index:10;">
+      <div style="max-width:480px;margin:0 auto;display:flex;align-items:center;justify-content:space-between;">
+        <div>
+          <div class="serif" style="color:#fff;font-size:20px;font-weight:700;letter-spacing:-0.02em;">Invoice Pro</div>
+          <div style="color:#78716c;font-size:11px;margin-top:1px;">Invoice ${esc(S.inv.number)}</div>
+        </div>
+        <div style="display:flex;gap:10px;align-items:center;">
+          <button id="btn-settings" style="background:rgba(255,255,255,0.08);border:none;border-radius:8px;padding:8px 12px;color:#d6d3d1;font-size:13px;cursor:pointer;">⚙ Key</button>
+          <button id="btn-new" style="background:rgba(255,255,255,0.08);border:none;border-radius:8px;padding:8px 12px;color:#d6d3d1;font-size:13px;cursor:pointer;">+ New</button>
+        </div>
+      </div>
+    </header>`;
+}
+
+function renderStepper() {
+  const steps = ['Profile','Client','Items','Review'];
+  const dots = steps.map((lbl, i) => {
+    const n = i+1;
+    const done = S.step > n;
+    const active = S.step === n;
+    const dotColor = done ? '#d97706' : active ? '#d97706' : '#e7e5e4';
+    const textColor = active ? '#1c1917' : done ? '#d97706' : '#a8a29e';
+    const fontWeight = active ? '600' : '400';
+    return `
+      <div style="display:flex;flex-direction:column;align-items:center;gap:5px;flex:1;">
+        <div style="width:32px;height:32px;border-radius:50%;background:${dotColor};display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:600;color:${done?'#fff':active?'#fff':'#a8a29e'};border:2px solid ${done||active?dotColor:'#e7e5e4'};transition:all 0.2s;">
+          ${done ? '✓' : n}
+        </div>
+        <div style="font-size:10px;font-weight:${fontWeight};color:${textColor};letter-spacing:0.04em;text-transform:uppercase;">${lbl}</div>
+      </div>`;
+  }).join(`<div style="flex:1;height:2px;background:#e7e5e4;margin-top:15px;border-radius:2px;position:relative;"><div style="position:absolute;left:0;top:0;height:100%;background:#d97706;border-radius:2px;width:${S.step>2?'100%':S.step>1?'100%':'0%'};transition:width 0.3s;"></div></div>`);
+  return `<div style="display:flex;align-items:flex-start;padding:20px 0 24px;gap:0;">${dots}</div>`;
+}
+
+// ============================================================
+// STEP 1 — PROFILE
+// ============================================================
+function renderStep1() {
+  const c = S.inv.company;
+  return `
+    <div class="card" style="margin-bottom:16px;">
+      <div class="serif" style="font-size:20px;font-weight:700;margin-bottom:4px;">Your Business</div>
+      <div style="color:#78716c;font-size:13px;margin-bottom:20px;">Saved automatically for next time.</div>
+
+      ${field('Company / Your Name', 'text', 'company.name', c.name, 'e.g. Sparkle Clean Co.')}
+      ${field('Address', 'text', 'company.address', c.address, '123 Main Street')}
+      ${field('City, Province, Postal', 'text', 'company.city', c.city, 'Edmonton, AB T5R 1K1')}
+      ${field('Phone', 'tel', 'company.phone', c.phone, '780-555-0100')}
+      ${field('Email', 'email', 'company.email', c.email, 'you@example.com')}
+      ${field('GST Number', 'text', 'company.gst', c.gst, 'e.g. 718831944RT0001')}
+
+      <div class="field-group">
+        <label>Business Logo (optional)</label>
+        ${c.logo ? `
+          <div style="display:flex;align-items:center;gap:12px;">
+            <img src="${c.logo}" style="height:50px;object-fit:contain;border-radius:8px;border:1px solid #e7e5e4;" />
+            <button id="btn-remove-logo" class="btn-secondary" style="padding:8px 14px;font-size:13px;width:auto;">Remove</button>
+          </div>` :
+          `<label style="display:flex;align-items:center;gap:10px;padding:14px;background:#faf8f5;border:1.5px dashed #d6d3d1;border-radius:10px;cursor:pointer;text-transform:none;letter-spacing:0;font-size:14px;color:#78716c;font-weight:400;">
+            <span style="font-size:22px;">📷</span> Tap to upload logo
+            <input type="file" id="logo-upload" accept="image/*" style="display:none;">
+          </label>`
+        }
+      </div>
+    </div>`;
+}
+
+// ============================================================
+// STEP 2 — CLIENT
+// ============================================================
+function renderStep2() {
+  const c = S.inv.client;
+  return `
+    <div class="card" style="margin-bottom:16px;">
+      <div class="serif" style="font-size:20px;font-weight:700;margin-bottom:4px;">Client Details</div>
+      <div style="color:#78716c;font-size:13px;margin-bottom:20px;">Who are you invoicing?</div>
+      ${field('Client Name *', 'text', 'client.name', c.name, 'Sarah Johnson')}
+      ${field('Address', 'text', 'client.address', c.address, '456 Oak Avenue')}
+      ${field('City, Province, Postal', 'text', 'client.city', c.city, 'Edmonton, AB T5J 0N3')}
+      ${field('Phone', 'tel', 'client.phone', c.phone, '780-555-0199')}
+      ${field('Email', 'email', 'client.email', c.email, 'client@example.com')}
+    </div>`;
+}
+
+// ============================================================
+// STEP 3 — ITEMS
+// ============================================================
+function renderStep3() {
+  const inv = S.inv;
+  const sub = subtotal(inv);
+  const disc = discountAmt(inv);
+  const tax = taxAmt(inv);
+  const tot = total(inv);
+
+  const itemsHtml = inv.items.map((item, i) => `
+    <div class="item-row" data-item-id="${item.id}">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+        <span style="font-weight:600;font-size:13px;color:#78716c;text-transform:uppercase;letter-spacing:0.05em;">Item ${i+1}</span>
+        ${inv.items.length > 1 ? `<button data-action="remove-item" data-id="${item.id}" style="background:none;border:none;font-size:18px;color:#a8a29e;cursor:pointer;padding:4px;">✕</button>` : ''}
+      </div>
+      <div class="field-group">
+        <label>Description</label>
+        <input type="text" data-field="items.${item.id}.desc" value="${esc(item.desc)}" placeholder="Deep clean — 3 bed/2 bath" />
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+        <div class="field-group">
+          <label>Qty</label>
+          <input type="number" data-field="items.${item.id}.qty" value="${item.qty}" min="0.01" step="0.01" />
+        </div>
+        <div class="field-group">
+          <label>Unit Price ($)</label>
+          <input type="number" data-field="items.${item.id}.price" value="${item.price}" min="0" step="0.01" placeholder="0.00" />
+        </div>
+      </div>
+      <div style="text-align:right;font-size:14px;color:#44403c;font-weight:600;">
+        = ${inv.currency}${fmt(Number(item.qty||0) * Number(item.price||0))}
+      </div>
+    </div>`).join('');
+
+  return `
+    <div class="card" style="margin-bottom:16px;">
+      <div class="serif" style="font-size:20px;font-weight:700;margin-bottom:4px;">Services & Items</div>
+      <div style="color:#78716c;font-size:13px;margin-bottom:20px;">Add everything you're charging for.</div>
+      ${itemsHtml}
+      <button id="btn-add-item" class="btn-secondary" style="width:100%;margin-bottom:20px;">+ Add Another Item</button>
+
+      <div style="border-top:1.5px solid #e7e5e4;padding-top:16px;">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
+          <div class="field-group" style="margin:0;">
+            <label>${esc(inv.taxName)} Rate (%)</label>
+            <input type="number" data-field="taxRate" value="${inv.taxRate}" min="0" max="100" step="0.01" />
+          </div>
+          <div class="field-group" style="margin:0;">
+            <label>Discount (%)</label>
+            <input type="number" data-field="discount" value="${inv.discount}" min="0" max="100" step="0.01" />
+          </div>
+        </div>
+        <div class="field-group">
+          <label>Notes</label>
+          <textarea data-field="notes" rows="2" placeholder="Thank you for your business!">${esc(inv.notes)}</textarea>
+        </div>
+        <div class="field-group">
+          <label>Terms & Conditions</label>
+          <textarea data-field="terms" rows="2" placeholder="Payment due within 14 days.">${esc(inv.terms)}</textarea>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" style="background:#1c1917;border-color:#1c1917;">
+      <div style="display:flex;justify-content:space-between;color:#d6d3d1;font-size:14px;margin-bottom:8px;">
+        <span>Subtotal</span><span>${inv.currency}${fmt(sub)}</span>
+      </div>
+      ${inv.discount > 0 ? `
+      <div style="display:flex;justify-content:space-between;color:#86efac;font-size:14px;margin-bottom:8px;">
+        <span>Discount (${inv.discount}%)</span><span>-${inv.currency}${fmt(disc)}</span>
+      </div>` : ''}
+      <div style="display:flex;justify-content:space-between;color:#d6d3d1;font-size:14px;margin-bottom:12px;padding-bottom:12px;border-bottom:1px solid #44403c;">
+        <span>${esc(inv.taxName)} (${inv.taxRate}%)</span><span>${inv.currency}${fmt(tax)}</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;color:#fff;font-size:20px;font-weight:700;">
+        <span class="serif">Total</span><span>${inv.currency}${fmt(tot)}</span>
+      </div>
+    </div>`;
+}
+
+// ============================================================
+// STEP 4 — REVIEW
+// ============================================================
+function renderStep4() {
+  const inv = S.inv;
+  const sub = subtotal(inv);
+  const disc = discountAmt(inv);
+  const tax = taxAmt(inv);
+  const tot = total(inv);
+
+  const auditHtml = S.auditing ? `
+    <div class="audit-loading">
+      <div style="display:flex;align-items:center;gap:10px;color:#475569;">
+        <span style="animation:spin 1s linear infinite;display:inline-block;font-size:18px;">⏳</span>
+        <span style="font-weight:500;">Auditing your invoice...</span>
+      </div>
+    </div>` :
+    S.audit ? `
+    <div class="${S.audit.cls}">
+      <div style="font-weight:700;font-size:15px;margin-bottom:8px;">${S.audit.status}</div>
+      <div style="font-size:14px;line-height:1.6;white-space:pre-wrap;color:#44403c;">${esc(S.audit.text)}</div>
+    </div>` :
+    `<button id="btn-audit" class="btn-primary" style="background:#1c1917;">
+      ✦ Run AI Audit
+    </button>
+    <p style="text-align:center;font-size:12px;color:#a8a29e;margin-top:8px;">Checks for errors before you send</p>`;
+
+  return `
+    <div class="card" style="margin-bottom:16px;">
+      <div class="serif" style="font-size:20px;font-weight:700;margin-bottom:16px;">AI Audit</div>
+      ${auditHtml}
+    </div>
+
+    <div class="card" style="margin-bottom:16px;">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px;">
+        <div>
+          <div class="serif" style="font-size:18px;font-weight:700;">${esc(inv.company.name)}</div>
+          <div style="font-size:12px;color:#78716c;line-height:1.6;">
+            ${esc(inv.company.address)}${inv.company.address?'<br>':''}
+            ${esc(inv.company.city)}${inv.company.city?'<br>':''}
+            ${inv.company.gst?'GST: '+esc(inv.company.gst)+'<br>':''}
+          </div>
+        </div>
+        <div style="text-align:right;">
+          <div class="serif" style="font-size:22px;font-weight:700;color:#d97706;">INVOICE</div>
+          <div style="font-size:12px;color:#78716c;line-height:1.8;">
+            <strong>#</strong> ${esc(inv.number)}<br>
+            <strong>Date:</strong> ${esc(inv.date)}<br>
+            <strong>Due:</strong> ${esc(inv.dueDate)}
+          </div>
+        </div>
+      </div>
+
+      <div style="background:#faf8f5;border-radius:10px;padding:12px;margin-bottom:16px;">
+        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:#78716c;margin-bottom:4px;">Bill To</div>
+        <div style="font-weight:600;font-size:14px;">${esc(inv.client.name) || '<span style="color:#a8a29e;font-style:italic;">No client entered</span>'}</div>
+        <div style="font-size:13px;color:#78716c;line-height:1.5;">
+          ${esc(inv.client.address)}${inv.client.address?'<br>':''}
+          ${esc(inv.client.city)}
+        </div>
+      </div>
+
+      <div style="overflow-x:auto;">
+        <table class="preview-table">
+          <thead>
+            <tr>
+              <th>Description</th>
+              <th style="text-align:center;">Qty</th>
+              <th style="text-align:right;">Price</th>
+              <th style="text-align:right;">Total</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${inv.items.map(item => `
+              <tr>
+                <td>${esc(item.desc) || '<em style="color:#a8a29e">No description</em>'}</td>
+                <td style="text-align:center;">${item.qty}</td>
+                <td style="text-align:right;">${inv.currency}${fmt(item.price)}</td>
+                <td style="text-align:right;font-weight:500;">${inv.currency}${fmt(Number(item.qty)*Number(item.price))}</td>
+              </tr>`).join('')}
+          </tbody>
+        </table>
+      </div>
+
+      <div style="margin-top:12px;border-top:1.5px solid #e7e5e4;padding-top:12px;">
+        <div style="display:flex;justify-content:flex-end;">
+          <div style="width:180px;">
+            <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:5px;">
+              <span style="color:#78716c;">Subtotal</span><span>${inv.currency}${fmt(sub)}</span>
+            </div>
+            ${inv.discount > 0 ? `
+            <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:5px;color:#16a34a;">
+              <span>Discount (${inv.discount}%)</span><span>-${inv.currency}${fmt(disc)}</span>
+            </div>` : ''}
+            <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:8px;padding-bottom:8px;border-bottom:1px solid #e7e5e4;">
+              <span style="color:#78716c;">${esc(inv.taxName)} (${inv.taxRate}%)</span><span>${inv.currency}${fmt(tax)}</span>
+            </div>
+            <div style="display:flex;justify-content:space-between;font-size:16px;font-weight:700;">
+              <span>Total</span><span style="color:#d97706;">${inv.currency}${fmt(tot)}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <button id="btn-pdf" class="btn-primary" style="margin-bottom:10px;">
+      ↓ Download PDF
+    </button>
+    <button id="btn-print" class="btn-secondary" style="width:100%;">
+      🖨 Print Invoice
+    </button>`;
+}
+
+// ============================================================
+// NAV
+// ============================================================
+function renderNav() {
+  return `
+    <div style="position:fixed;bottom:0;left:0;right:0;background:#fff;border-top:1px solid #e7e5e4;padding:14px 20px;z-index:10;">
+      <div style="max-width:480px;margin:0 auto;display:flex;gap:12px;">
+        ${S.step > 1 ? `<button id="btn-prev" class="btn-secondary" style="flex:1;">← Back</button>` : ''}
+        ${S.step < 4 ?
+          `<button id="btn-next" class="btn-primary" style="flex:2;">Continue →</button>` :
+          `<button id="btn-done" class="btn-primary" style="flex:2;background:#16a34a;">✓ Done — New Invoice</button>`
+        }
+      </div>
+    </div>`;
+}
+
+// ============================================================
+// MODALS
+// ============================================================
+function renderApiModal() {
+  const saved = localStorage.getItem('gemini_key') || '';
+  return `
+    <div class="overlay" id="api-overlay">
+      <div class="modal">
+        <div class="serif" style="font-size:20px;font-weight:700;margin-bottom:6px;">Gemini API Key</div>
+        <p style="font-size:14px;color:#78716c;margin-bottom:18px;">
+          Get a free key at <strong>aistudio.google.com</strong> → Get API Key. It's free, no billing needed.
+        </p>
+        <div class="field-group">
+          <label>Your API Key</label>
+          <input type="text" id="api-key-input" value="${esc(saved)}" placeholder="AIzaSy..." autocomplete="off" />
+        </div>
+        <div style="display:flex;gap:10px;margin-top:8px;">
+          <button id="btn-cancel-api" class="btn-secondary" style="flex:1;">Cancel</button>
+          <button id="btn-save-api" class="btn-primary" style="flex:2;">Save Key</button>
+        </div>
+      </div>
+    </div>`;
+}
+
+function renderResetModal() {
+  return `
+    <div class="overlay" id="reset-overlay">
+      <div class="modal">
+        <div class="serif" style="font-size:20px;font-weight:700;margin-bottom:8px;">Start New Invoice?</div>
+        <p style="font-size:14px;color:#78716c;margin-bottom:20px;">This will clear the current invoice. Your profile info will be kept.</p>
+        <div style="display:flex;gap:10px;">
+          <button id="btn-cancel-reset" class="btn-secondary" style="flex:1;">Cancel</button>
+          <button id="btn-confirm-reset" class="btn-primary" style="flex:2;background:#dc2626;">Yes, Start New</button>
+        </div>
+      </div>
+    </div>`;
+}
+
+// ============================================================
+// FIELD HELPER
+// ============================================================
+function field(lbl, type, key, val, placeholder) {
+  return `
+    <div class="field-group">
+      <label>${lbl}</label>
+      <input type="${type}" data-field="${key}" value="${esc(val)}" placeholder="${placeholder || ''}" />
+    </div>`;
+}
+
+// ============================================================
+// EVENTS
+// ============================================================
+function bind() {
+  const root = document.getElementById('root');
+
+  root.addEventListener('input', e => {
+    const el = e.target;
+    const f = el.dataset.field;
+    if (!f) return;
+
+    const parts = f.split('.');
+    if (parts[0] === 'items') {
+      // items.<id>.<key>
+      const [, id, key] = parts;
+      const item = S.inv.items.find(x => x.id === id);
+      if (item) item[key] = el.value;
+    } else if (parts.length === 2) {
+      S.inv[parts[0]][parts[1]] = el.value;
+    } else {
+      S.inv[f] = el.value;
+    }
+
+    saveDraft();
+    // Live-update totals on step 3
+    if (S.step === 3) {
+      const totEl = root.querySelector('[data-total]');
+      if (totEl) totEl.textContent = S.inv.currency + fmt(total(S.inv));
+    }
+  });
+
+  root.addEventListener('click', e => {
+    const id = e.target.id || e.target.closest('[id]')?.id;
+    const action = e.target.dataset.action || e.target.closest('[data-action]')?.dataset.action;
+    const dataId = e.target.dataset.id || e.target.closest('[data-id]')?.dataset.id;
+
+    if (id === 'btn-next') { nextStep(); return; }
+    if (id === 'btn-prev') { prevStep(); return; }
+    if (id === 'btn-new') { S.showResetConfirm = true; render(); return; }
+    if (id === 'btn-settings') { S.showApiModal = true; render(); return; }
+    if (id === 'btn-audit') { runAudit(); return; }
+    if (id === 'btn-pdf') { generatePDF(); return; }
+    if (id === 'btn-print') { printInvoice(); return; }
+    if (id === 'btn-add-item') { S.inv.items.push({ id: uid(), desc: '', qty: 1, price: 0 }); saveDraft(); render(); return; }
+    if (id === 'btn-remove-logo') { S.inv.company.logo = ''; saveDraft(); render(); return; }
+    if (id === 'btn-done') { newInvoice(); return; }
+
+    // Modal controls
+    if (id === 'btn-cancel-api' || id === 'api-overlay') { S.showApiModal = false; render(); return; }
+    if (id === 'btn-save-api') {
+      const k = document.getElementById('api-key-input')?.value?.trim();
+      if (k) { localStorage.setItem('gemini_key', k); }
+      S.showApiModal = false; render(); return;
+    }
+    if (id === 'btn-cancel-reset' || id === 'reset-overlay') { S.showResetConfirm = false; render(); return; }
+    if (id === 'btn-confirm-reset') { newInvoice(); S.showResetConfirm = false; return; }
+
+    if (action === 'remove-item') {
+      S.inv.items = S.inv.items.filter(x => x.id !== dataId);
+      if (S.inv.items.length === 0) S.inv.items.push({ id: uid(), desc: '', qty: 1, price: 0 });
+      saveDraft(); render(); return;
+    }
+  });
+
+  // Logo upload
+  const logoInput = document.getElementById('logo-upload');
+  if (logoInput) {
+    logoInput.addEventListener('change', e => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = ev => {
+        S.inv.company.logo = ev.target.result;
+        saveDraft();
+        render();
+      };
+      reader.readAsDataURL(file);
+    });
+  }
+}
+
+// ============================================================
+// NAVIGATION
+// ============================================================
+function nextStep() {
+  if (!validateStep()) return;
+  if (S.step === 1) saveProfile();
+  S.step = Math.min(4, S.step + 1);
+  S.audit = null;
+  render();
+  window.scrollTo(0, 0);
+}
+
+function prevStep() {
+  S.step = Math.max(1, S.step - 1);
+  render();
+  window.scrollTo(0, 0);
+}
+
+function newInvoice() {
+  S.inv = freshInvoice();
+  S.step = 1;
+  S.audit = null;
+  S.auditing = false;
+  S.showResetConfirm = false;
+  localStorage.removeItem('inv_draft');
+  render();
+  window.scrollTo(0, 0);
+}
+
+function validateStep() {
+  if (S.step === 1 && !S.inv.company.name.trim()) {
+    alert('Please enter your company or name.');
+    return false;
+  }
+  if (S.step === 2 && !S.inv.client.name.trim()) {
+    alert('Please enter the client name.');
+    return false;
+  }
+  if (S.step === 3) {
+    const empty = S.inv.items.some(i => !i.desc.trim());
+    if (empty) { alert('Please add a description for each item.'); return false; }
+  }
+  return true;
+}
+
+// ============================================================
+// GEMINI AUDIT
+// ============================================================
+async function runAudit() {
+  const apiKey = localStorage.getItem('gemini_key');
+  if (!apiKey) {
+    S.showApiModal = true;
+    render();
+    return;
+  }
+
+  S.auditing = true;
+  S.audit = null;
+  render();
+
+  const inv = S.inv;
+  const sub = subtotal(inv);
+  const disc = discountAmt(inv);
+  const tax = taxAmt(inv);
+  const tot = total(inv);
+
+  const prompt = `You are a professional invoice auditor. Review this invoice and give a concise audit report.
+
+INVOICE DATA:
+- Invoice #: ${inv.number}
+- Date: ${inv.date} | Due: ${inv.dueDate}
+- Company: ${inv.company.name}, ${inv.company.address}, ${inv.company.city}
+- GST#: ${inv.company.gst || 'NOT PROVIDED'}
+- Client: ${inv.client.name || 'NOT PROVIDED'}, ${inv.client.email || 'no email'}, ${inv.client.phone || 'no phone'}
+- Items: ${inv.items.map(i => `${i.desc} (qty: ${i.qty} × $${i.price} = $${fmt(Number(i.qty)*Number(i.price))})` ).join('; ')}
+- Subtotal: $${fmt(sub)} | Discount: ${inv.discount}% (-$${fmt(disc)}) | ${inv.taxName} ${inv.taxRate}%: $${fmt(tax)} | TOTAL: $${fmt(tot)}
+- Notes: ${inv.notes || 'none'}
+- Terms: ${inv.terms || 'none'}
+
+VERIFY:
+1. Math is correct (subtotal, tax, total)
+2. Required fields complete (company name, client name, at least 1 item with price > 0)
+3. GST number present if charging GST
+4. Professional quality (contact info, clear descriptions)
+
+RESPOND with exactly this format:
+STATUS: [READY TO SEND / NEEDS ATTENTION / MISSING CRITICAL INFO]
+
+Issues:
+[list any issues, or write "None — invoice looks great!"]
+
+Tip:
+[one brief improvement suggestion]`;
+
+  try {
+    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
+    });
+
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.error?.message || `HTTP ${res.status}`);
+    }
+
+    const data = await res.json();
+    const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+
+    let cls = 'audit-warn';
+    let status = '⚠ Needs Attention';
+    if (text.includes('READY TO SEND')) { cls = 'audit-ready'; status = '✅ Ready to Send'; }
+    else if (text.includes('MISSING CRITICAL')) { cls = 'audit-error'; status = '❌ Missing Critical Info'; }
+    else if (text.includes('NEEDS ATTENTION')) { cls = 'audit-warn'; status = '⚠ Needs Attention'; }
+
+    S.audit = { cls, status, text: text.replace(/^STATUS:.*$/m, '').trim() };
+  } catch (err) {
+    S.audit = {
+      cls: 'audit-error',
+      status: '❌ Audit Failed',
+      text: `Could not connect to Gemini.\n\nError: ${err.message}\n\nCheck your API key in Settings (⚙ Key button).`
+    };
+  }
+
+  S.auditing = false;
+  render();
+}
+
+// ============================================================
+// PDF GENERATION
+// ============================================================
+function generatePDF() {
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+  const inv = S.inv;
+  const pw = 210;
+  const mg = 18;
+  let y = mg;
+
+  // Logo
+  if (inv.company.logo) {
+    try {
+      const type = inv.company.logo.includes('png') ? 'PNG' : 'JPEG';
+      doc.addImage(inv.company.logo, type, mg, y, 35, 18);
+      y += 24;
+    } catch(e) {}
+  }
+
+  // Company block
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(13);
+  doc.setTextColor(28, 25, 23);
+  doc.text(inv.company.name || 'Your Company', mg, y); y += 6;
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8.5);
+  doc.setTextColor(100, 96, 92);
+  if (inv.company.address) { doc.text(inv.company.address, mg, y); y += 4.5; }
+  if (inv.company.city) { doc.text(inv.company.city, mg, y); y += 4.5; }
+  if (inv.company.phone) { doc.text(inv.company.phone, mg, y); y += 4.5; }
+  if (inv.company.email) { doc.text(inv.company.email, mg, y); y += 4.5; }
+  if (inv.company.gst) { doc.text('GST: ' + inv.company.gst, mg, y); y += 4.5; }
+
+  // INVOICE title (top right)
+  doc.setFont('times', 'bold');
+  doc.setFontSize(32);
+  doc.setTextColor(217, 119, 6);
+  doc.text('INVOICE', pw - mg, 26, { align: 'right' });
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8.5);
+  doc.setTextColor(100);
+  doc.text(`Invoice #: ${inv.number}`, pw - mg, 36, { align: 'right' });
+  doc.text(`Date: ${inv.date}`, pw - mg, 41, { align: 'right' });
+  doc.text(`Due Date: ${inv.dueDate}`, pw - mg, 46, { align: 'right' });
+
+  y = Math.max(y + 6, 56);
+
+  // Divider
+  doc.setDrawColor(230, 228, 226);
+  doc.setLineWidth(0.4);
+  doc.line(mg, y, pw - mg, y);
+  y += 8;
+
+  // Bill To
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(7.5);
+  doc.setTextColor(120, 113, 108);
+  doc.text('BILL TO', mg, y); y += 5;
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(10);
+  doc.setTextColor(28, 25, 23);
+  doc.text(inv.client.name || 'Client Name', mg, y); y += 5;
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8.5);
+  doc.setTextColor(100);
+  if (inv.client.address) { doc.text(inv.client.address, mg, y); y += 4.5; }
+  if (inv.client.city) { doc.text(inv.client.city, mg, y); y += 4.5; }
+  if (inv.client.phone) { doc.text(inv.client.phone, mg, y); y += 4.5; }
+  if (inv.client.email) { doc.text(inv.client.email, mg, y); y += 4.5; }
+
+  y += 6;
+
+  // Items table
+  const sub = subtotal(inv);
+  const disc = discountAmt(inv);
+  const tax = taxAmt(inv);
+  const tot = total(inv);
+
+  const foot = [
+    [{ content: '', colSpan: 2 }, { content: 'Subtotal', styles: { fontStyle: 'bold' } }, `${inv.currency}${fmt(sub)}`],
+    ...(inv.discount > 0 ? [[{ content: '', colSpan: 2 }, `Discount (${inv.discount}%)`, `-${inv.currency}${fmt(disc)}`]] : []),
+    [{ content: '', colSpan: 2 }, `${inv.taxName} (${inv.taxRate}%)`, `${inv.currency}${fmt(tax)}`],
+    [{ content: '', colSpan: 2 }, { content: 'TOTAL', styles: { fontStyle: 'bold', fontSize: 11, textColor: [217, 119, 6] } }, { content: `${inv.currency}${fmt(tot)}`, styles: { fontStyle: 'bold', fontSize: 11, textColor: [217, 119, 6] } }],
+  ];
+
+  doc.autoTable({
+    startY: y,
+    head: [['Description', 'Qty', 'Unit Price', 'Amount']],
+    body: inv.items.map(i => [
+      i.desc || '—',
+      String(i.qty),
+      `${inv.currency}${fmt(i.price)}`,
+      `${inv.currency}${fmt(Number(i.qty) * Number(i.price))}`
+    ]),
+    foot,
+    margin: { left: mg, right: mg },
+    headStyles: { fillColor: [28, 25, 23], textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 9, cellPadding: 4 },
+    bodyStyles: { fontSize: 9, cellPadding: 3.5 },
+    footStyles: { fontSize: 9, fillColor: [250, 248, 245], textColor: [28, 25, 23] },
+    alternateRowStyles: { fillColor: [250, 248, 245] },
+    columnStyles: {
+      0: { cellWidth: 'auto' },
+      1: { cellWidth: 18, halign: 'center' },
+      2: { cellWidth: 32, halign: 'right' },
+      3: { cellWidth: 32, halign: 'right' },
+    },
+    showFoot: 'lastPage',
+  });
+
+  y = doc.lastAutoTable.finalY + 10;
+
+  if (inv.notes) {
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(8.5); doc.setTextColor(28,25,23);
+    doc.text('Notes:', mg, y); y += 5;
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(100);
+    const nl = doc.splitTextToSize(inv.notes, pw - 2*mg);
+    doc.text(nl, mg, y); y += nl.length * 4 + 6;
+  }
+
+  if (inv.terms) {
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(8.5); doc.setTextColor(28,25,23);
+    doc.text('Terms & Conditions:', mg, y); y += 5;
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(100);
+    const tl = doc.splitTextToSize(inv.terms, pw - 2*mg);
+    doc.text(tl, mg, y);
+  }
+
+  doc.save(`Invoice_${inv.number}_${(inv.client.name || 'Client').replace(/\s+/g,'_')}.pdf`);
+}
+
+// ============================================================
+// PRINT
+// ============================================================
+function printInvoice() {
+  const inv = S.inv;
+  const sub = subtotal(inv);
+  const disc = discountAmt(inv);
+  const tax = taxAmt(inv);
+  const tot = total(inv);
+
+  const printHtml = `
+    <html><head><title>Invoice ${inv.number}</title>
+    <style>
+      body { font-family: Arial, sans-serif; font-size: 12px; color: #1c1917; margin: 0; padding: 24px; }
+      .header { display: flex; justify-content: space-between; margin-bottom: 24px; }
+      .company-name { font-size: 18px; font-weight: 700; }
+      .inv-title { font-size: 28px; font-weight: 700; color: #d97706; }
+      table { width: 100%; border-collapse: collapse; margin: 16px 0; }
+      th { background: #1c1917; color: #fff; padding: 8px; text-align: left; }
+      td { padding: 7px 8px; border-bottom: 1px solid #e7e5e4; }
+      .right { text-align: right; }
+      .center { text-align: center; }
+      .totals td { border: none; }
+      .total-row { font-weight: 700; font-size: 14px; color: #d97706; }
+    </style>
+    </head><body>
+    <div class="header">
+      <div>
+        <div class="company-name">${esc(inv.company.name)}</div>
+        <div>${esc(inv.company.address)}<br>${esc(inv.company.city)}<br>${esc(inv.company.phone)}<br>${esc(inv.company.email)}<br>${inv.company.gst?'GST: '+esc(inv.company.gst):''}</div>
+      </div>
+      <div style="text-align:right;">
+        <div class="inv-title">INVOICE</div>
+        <div><strong>#</strong> ${esc(inv.number)}<br><strong>Date:</strong> ${inv.date}<br><strong>Due:</strong> ${inv.dueDate}</div>
+      </div>
+    </div>
+    <div><strong>Bill To:</strong><br>${esc(inv.client.name)}<br>${esc(inv.client.address)}<br>${esc(inv.client.city)}<br>${esc(inv.client.phone)}<br>${esc(inv.client.email)}</div>
+    <table>
+      <thead><tr><th>Description</th><th class="center">Qty</th><th class="right">Unit Price</th><th class="right">Amount</th></tr></thead>
+      <tbody>${inv.items.map(i=>`<tr><td>${esc(i.desc)}</td><td class="center">${i.qty}</td><td class="right">${inv.currency}${fmt(i.price)}</td><td class="right">${inv.currency}${fmt(Number(i.qty)*Number(i.price))}</td></tr>`).join('')}</tbody>
+    </table>
+    <table class="totals" style="width:200px;margin-left:auto;">
+      <tr><td>Subtotal</td><td class="right">${inv.currency}${fmt(sub)}</td></tr>
+      ${inv.discount>0?`<tr><td>Discount (${inv.discount}%)</td><td class="right" style="color:green;">-${inv.currency}${fmt(disc)}</td></tr>`:''}
+      <tr><td>${inv.taxName} (${inv.taxRate}%)</td><td class="right">${inv.currency}${fmt(tax)}</td></tr>
+      <tr class="total-row"><td><strong>TOTAL</strong></td><td class="right"><strong>${inv.currency}${fmt(tot)}</strong></td></tr>
+    </table>
+    ${inv.notes?`<p><strong>Notes:</strong> ${esc(inv.notes)}</p>`:''}
+    ${inv.terms?`<p><strong>Terms:</strong> ${esc(inv.terms)}</p>`:''}
+    </body></html>`;
+
+  const w = window.open('', '_blank');
+  w.document.write(printHtml);
+  w.document.close();
+  w.print();
+}
+
+// ============================================================
+// INIT
+// ============================================================
+render();
+
+// Spinning animation for loading
+const style = document.createElement('style');
+style.textContent = '@keyframes spin { from { transform:rotate(0deg); } to { transform:rotate(360deg); } }';
+document.head.appendChild(style);
+</script>
+</body>
+</html>
