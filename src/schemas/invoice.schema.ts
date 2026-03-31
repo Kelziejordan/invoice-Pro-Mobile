@@ -57,9 +57,16 @@ export const AIInvoiceExtractionSchema = z.object({
   })).optional(),
 });
 
+export const AIAuditSchema = z.object({
+  isPerfect: z.boolean(),
+  warnings: z.array(z.string()),
+  suggestions: z.array(z.string()),
+});
+
 export type InvoiceItem = z.infer<typeof InvoiceItemSchema>;
 export type Profile = z.infer<typeof ProfileSchema>;
 export type Client = z.infer<typeof ClientSchema>;
 export type Invoice = z.infer<typeof InvoiceSchema>;
 export type AIInvoiceExtraction = z.infer<typeof AIInvoiceExtractionSchema>;
+export type AIAudit = z.infer<typeof AIAuditSchema>;
 export type InvoiceConfig = z.infer<typeof InvoiceConfigSchema>;

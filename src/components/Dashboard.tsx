@@ -12,9 +12,11 @@ interface Props {
   onNewInvoice: () => void;
   onEditInvoice: (invoice: Invoice) => void;
   onDeleteInvoice: (id: string) => void;
+  hasDraft?: boolean;
+  onResumeDraft?: () => void;
 }
 
-export function Dashboard({ invoices, onNewInvoice, onEditInvoice, onDeleteInvoice }: Props) {
+export function Dashboard({ invoices, onNewInvoice, onEditInvoice, onDeleteInvoice, hasDraft, onResumeDraft }: Props) {
   if (invoices.length === 0) {
     return (
       <div className="w-full max-w-4xl mx-auto flex flex-col items-center justify-center py-20 text-center">
@@ -25,10 +27,17 @@ export function Dashboard({ invoices, onNewInvoice, onEditInvoice, onDeleteInvoi
         <p className="text-slate-500 max-w-md mb-8">
           Create your first professional invoice in seconds using our AI-powered wizard.
         </p>
-        <Button onClick={onNewInvoice} size="lg">
-          <Plus className="w-5 h-5 mr-2" aria-hidden="true" />
-          Create First Invoice
-        </Button>
+        <div className="flex flex-col sm:flex-row gap-4 justify-center">
+          {hasDraft && onResumeDraft && (
+            <Button onClick={onResumeDraft} size="lg" variant="secondary">
+              Resume Draft
+            </Button>
+          )}
+          <Button onClick={onNewInvoice} size="lg">
+            <Plus className="w-5 h-5 mr-2" aria-hidden="true" />
+            {hasDraft ? 'Start Fresh Invoice' : 'Create First Invoice'}
+          </Button>
+        </div>
       </div>
     );
   }
@@ -40,10 +49,17 @@ export function Dashboard({ invoices, onNewInvoice, onEditInvoice, onDeleteInvoi
           <h2 className="text-2xl font-bold text-slate-900">Invoice History</h2>
           <p className="text-slate-500">Manage and track your past invoices.</p>
         </div>
-        <Button onClick={onNewInvoice}>
-          <Plus className="w-4 h-4 mr-2" aria-hidden="true" />
-          New Invoice
-        </Button>
+        <div className="flex gap-3">
+          {hasDraft && onResumeDraft && (
+            <Button onClick={onResumeDraft} variant="secondary">
+              Resume Draft
+            </Button>
+          )}
+          <Button onClick={onNewInvoice}>
+            <Plus className="w-4 h-4 mr-2" aria-hidden="true" />
+            New Invoice
+          </Button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">

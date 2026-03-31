@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { useInvoiceWizard } from './hooks/useInvoiceWizard';
 import { useSavedInvoices } from './hooks/useSavedInvoices';
@@ -6,17 +6,26 @@ import { ProfileStep } from './components/wizard/ProfileStep';
 import { ClientStep } from './components/wizard/ClientStep';
 import { ItemsStep } from './components/wizard/ItemsStep';
 import { ReviewStep } from './components/wizard/ReviewStep';
-import { AIAssistantModal } from './components/ai/AIAssistantModal';
+import { AIAssistantModal } from './components/ui/AIAssistantModal';
 import { Dashboard } from './components/Dashboard';
-import { Wand2, FileText, CheckCircle2, LayoutDashboard } from 'lucide-react';
+import { useOnlineStatus } from './hooks/useOnlineStatus';
+import { Wand2, FileText, CheckCircle2, LayoutDashboard, WifiOff } from 'lucide-react';
 import { InvoiceItem, Invoice } from './schemas/invoice.schema';
 import { Button } from './components/ui/Button';
 
 function WizardApp() {
-  const [view, setView] = useState<'dashboard' | 'wizard'>('dashboard');
+  const [view, setView] = useState<'dashboard' | 'wizard'>(() => {
+    return (localStorage.getItem('proinvoice_view') as 'dashboard' | 'wizard') || 'dashboard';
+  });
+  
+  useEffect(() => {
+    localStorage.setItem('proinvoice_view', view);
+  }, [view]);
+
   const wizard = useInvoiceWizard();
   const { savedInvoices, saveInvoice, deleteInvoice } = useSavedInvoices();
   const [isAIModalOpen, setIsAIModalOpen] = useState(false);
+  const isOnline = useOnlineStatus();
 
   const handleAIApply = (data: { clientName?: string; clientAddress?: string; taxRate?: number; items?: InvoiceItem[] }) => {
     if (data.clientName || data.clientAddress || data.taxRate !== undefined) {
@@ -52,6 +61,7 @@ function WizardApp() {
     saveInvoice(wizard.getFullInvoice());
     wizard.incrementInvoiceSequence(); // Increment sequence for next time
     wizard.clearDraft(); // Clear the draft since it's saved
+    wizard.resetDraft(); // Reset state so next invoice is fresh
     setView('dashboard');
   };
 
@@ -62,6 +72,10 @@ function WizardApp() {
 
   const handleNewInvoice = () => {
     wizard.resetDraft();
+    setView('wizard');
+  };
+
+  const handleResumeDraft = () => {
     setView('wizard');
   };
 
@@ -77,6 +91,12 @@ function WizardApp() {
           >
             <FileText className="w-6 h-6" aria-hidden="true" />
             <span>Invoice Pro</span>
+            {!isOnline && (
+              <span className="ml-2 flex items-center gap-1 text-xs font-medium bg-amber-100 text-amber-800 px-2 py-1 rounded-full">
+                <WifiOff className="w-3 h-3" />
+                Offline
+              </span>
+            )}
           </button>
           
           <div className="flex items-center gap-2">
@@ -85,7 +105,9 @@ function WizardApp() {
                 variant="outline" 
                 size="sm" 
                 onClick={() => setIsAIModalOpen(true)}
-                className="text-indigo-600 border-indigo-200 hover:bg-indigo-50"
+                disabled={!isOnline}
+                title={!isOnline ? "AI features require an internet connection" : "Extract details with AI"}
+                className="text-indigo-600 border-indigo-200 hover:bg-indigo-50 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <Wand2 className="w-4 h-4 mr-2" aria-hidden="true" />
                 <span className="hidden sm:inline">Magic Wand</span>
@@ -150,6 +172,8 @@ function WizardApp() {
             onNewInvoice={handleNewInvoice} 
             onEditInvoice={handleEditInvoice} 
             onDeleteInvoice={deleteInvoice} 
+            hasDraft={wizard.hasDraft}
+            onResumeDraft={handleResumeDraft}
           />
         ) : (
           <div className={`max-w-5xl mx-auto ${wizard.step === 'review' ? 'print:visible' : ''}`}>

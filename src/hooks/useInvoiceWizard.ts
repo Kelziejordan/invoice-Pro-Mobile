@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { Profile, Client, InvoiceItem, Invoice, ProfileSchema, InvoiceSchema } from '../schemas/invoice.schema';
+import { useState, useEffect, useCallback } from 'react';
+import { Profile, Client, InvoiceItem, Invoice, ProfileSchema } from '../schemas/invoice.schema';
 import { getTodayISODate, getFutureISODate } from '../utils/date';
 
 type WizardStep = 'profile' | 'client' | 'items' | 'review';
@@ -29,58 +29,49 @@ const defaultClient: Client = {
   notes: 'Thank you for your business!'
 };
 
+function getInitialProfile(): Profile {
+  if (typeof window === 'undefined') return defaultProfile;
+  const stored = localStorage.getItem(PROFILE_STORAGE_KEY);
+  if (stored) {
+    try {
+      const parsed = JSON.parse(stored);
+      const validation = ProfileSchema.safeParse(parsed);
+      if (validation.success) return validation.data;
+    } catch (e) {
+      console.error('Failed to parse profile', e);
+    }
+  }
+  return defaultProfile;
+}
+
+function getInitialDraft() {
+  if (typeof window === 'undefined') return null;
+  const stored = localStorage.getItem(DRAFT_STORAGE_KEY);
+  if (stored) {
+    try {
+      return JSON.parse(stored);
+    } catch (e) {
+      console.error('Failed to parse draft', e);
+    }
+  }
+  return null;
+}
+
 export function useInvoiceWizard() {
-  const [step, setStep] = useState<WizardStep>('profile');
+  const [initialDraft] = useState(getInitialDraft);
   
-  // State
-  const [profile, setProfile] = useState<Profile>(defaultProfile);
-  const [client, setClient] = useState<Client>(defaultClient);
-  const [items, setItems] = useState<InvoiceItem[]>([]);
-  const [date, setDate] = useState<string>(getTodayISODate());
-  const [dueDate, setDueDate] = useState<string>(getFutureISODate(14));
-  const [invoiceNumber, setInvoiceNumber] = useState<string>('');
-  const [draftId, setDraftId] = useState<string>(crypto.randomUUID());
-
-  // Load saved profile and draft on mount
-  useEffect(() => {
-    // Load Profile
-    const storedProfile = localStorage.getItem(PROFILE_STORAGE_KEY);
-    if (storedProfile) {
-      try {
-        const parsed = JSON.parse(storedProfile);
-        const validation = ProfileSchema.safeParse(parsed);
-        if (validation.success) {
-          setProfile(validation.data);
-        }
-      } catch (e) {
-        console.error('Failed to parse saved profile', e);
-      }
-    }
-
-    // Load Draft
-    const storedDraft = localStorage.getItem(DRAFT_STORAGE_KEY);
-    if (storedDraft) {
-      try {
-        const parsed = JSON.parse(storedDraft);
-        // We use partial validation here because a draft might be incomplete
-        if (parsed.client) setClient(parsed.client);
-        if (parsed.items) setItems(parsed.items);
-        if (parsed.date) setDate(parsed.date);
-        if (parsed.dueDate) setDueDate(parsed.dueDate);
-        if (parsed.invoiceNumber) setInvoiceNumber(parsed.invoiceNumber);
-        if (parsed.draftId) setDraftId(parsed.draftId);
-        if (parsed.step) setStep(parsed.step);
-      } catch (e) {
-        console.error('Failed to parse saved draft', e);
-      }
-    }
-  }, []);
+  const [step, setStep] = useState<WizardStep>(initialDraft?.step || 'profile');
+  const [profile, setProfile] = useState<Profile>(getInitialProfile);
+  const [client, setClient] = useState<Client>(initialDraft?.client || defaultClient);
+  const [items, setItems] = useState<InvoiceItem[]>(initialDraft?.items || []);
+  const [date, setDate] = useState<string>(initialDraft?.date || getTodayISODate());
+  const [dueDate, setDueDate] = useState<string>(initialDraft?.dueDate || getFutureISODate(14));
+  const [invoiceNumber, setInvoiceNumber] = useState<string>(initialDraft?.invoiceNumber || '');
+  const [draftId, setDraftId] = useState<string>(initialDraft?.draftId || crypto.randomUUID());
 
   // Save profile whenever it changes
   useEffect(() => {
-    if (profile.companyName) {
-      localStorage.setItem(PROFILE_STORAGE_KEY, JSON.stringify(profile));
-    }
+    localStorage.setItem(PROFILE_STORAGE_KEY, JSON.stringify(profile));
   }, [profile]);
 
   // Save draft whenever relevant state changes
@@ -89,7 +80,6 @@ export function useInvoiceWizard() {
     localStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(draft));
   }, [client, items, date, dueDate, invoiceNumber, draftId, step]);
 
-  // Generate invoice number dynamically if empty
   const currentInvoiceNumber = invoiceNumber || `${profile.invoiceConfig.prefix}${profile.invoiceConfig.nextNumber}`;
 
   const nextStep = useCallback(() => {
@@ -143,11 +133,10 @@ export function useInvoiceWizard() {
     setDueDate(getFutureISODate(14));
     setInvoiceNumber('');
     setDraftId(crypto.randomUUID());
-    setStep('client'); // Skip profile step on new invoices since it's saved
+    setStep(profile.companyName ? 'client' : 'profile');
     clearDraft();
-  }, [clearDraft]);
+  }, [clearDraft, profile.companyName]);
 
-  // Method to load an existing invoice for editing
   const loadInvoice = useCallback((invoice: Invoice) => {
     setProfile(invoice.profile);
     setClient(invoice.client);
@@ -159,34 +148,17 @@ export function useInvoiceWizard() {
     setStep('review');
   }, []);
 
+  const hasDraft = client.clientName !== '' || items.length > 0;
+
   return {
-    step,
-    setStep,
-    nextStep,
-    prevStep,
-    
-    profile,
-    setProfile,
-    
-    client,
-    setClient,
-    
-    items,
-    setItems,
-    
-    date,
-    setDate,
-    
-    dueDate,
-    setDueDate,
-    
-    invoiceNumber: currentInvoiceNumber,
-    setInvoiceNumber,
-    
-    getFullInvoice,
-    incrementInvoiceSequence,
-    resetDraft,
-    loadInvoice,
-    clearDraft
+    step, setStep, nextStep, prevStep,
+    profile, setProfile,
+    client, setClient,
+    items, setItems,
+    date, setDate,
+    dueDate, setDueDate,
+    invoiceNumber: currentInvoiceNumber, setInvoiceNumber,
+    getFullInvoice, incrementInvoiceSequence, resetDraft, loadInvoice, clearDraft,
+    hasDraft
   };
 }
