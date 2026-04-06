@@ -29,6 +29,7 @@ export const ClientSchema = z.object({
   clientName: z.string().min(1, "Client name is required"),
   clientEmail: z.string().email("Invalid email").optional().or(z.literal('')),
   clientAddress: z.string().optional(),
+  jobNumber: z.string().optional(),
   taxRate: z.number().min(0).max(100).default(0),
   discount: z.number().min(0).default(0),
   paymentTerms: z.string().optional(),
@@ -48,6 +49,7 @@ export const InvoiceSchema = z.object({
 export const AIInvoiceExtractionSchema = z.object({
   clientName: z.string().optional(),
   clientAddress: z.string().optional(),
+  jobNumber: z.string().optional(),
   taxRate: z.number().optional(),
   items: z.array(z.object({
     description: z.string(),
@@ -55,6 +57,27 @@ export const AIInvoiceExtractionSchema = z.object({
     quantity: z.number(),
     unitPrice: z.number(),
   })).optional(),
+});
+
+export const AIFixExtractionSchema = z.object({
+  client: z.object({
+    clientName: z.string().optional(),
+    clientEmail: z.string().optional(),
+    clientAddress: z.string().optional(),
+    jobNumber: z.string().optional(),
+    taxRate: z.number().optional(),
+    discount: z.number().optional(),
+    paymentTerms: z.string().optional(),
+    notes: z.string().optional(),
+  }).optional(),
+  items: z.array(z.object({
+    description: z.string(),
+    details: z.string().optional(),
+    quantity: z.number(),
+    unitPrice: z.number(),
+  })).optional(),
+  date: z.string().optional(),
+  dueDate: z.string().optional(),
 });
 
 export const AIAuditSchema = z.object({
@@ -68,5 +91,6 @@ export type Profile = z.infer<typeof ProfileSchema>;
 export type Client = z.infer<typeof ClientSchema>;
 export type Invoice = z.infer<typeof InvoiceSchema>;
 export type AIInvoiceExtraction = z.infer<typeof AIInvoiceExtractionSchema>;
+export type AIFixExtraction = z.infer<typeof AIFixExtractionSchema>;
 export type AIAudit = z.infer<typeof AIAuditSchema>;
 export type InvoiceConfig = z.infer<typeof InvoiceConfigSchema>;

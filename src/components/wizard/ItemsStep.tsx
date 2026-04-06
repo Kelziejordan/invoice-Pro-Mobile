@@ -153,8 +153,8 @@ export function ItemsStep({ items, setItems, currency, onNext, onPrev }: Props) 
                         type="number"
                         min="0"
                         step="0.01"
-                        value={item.quantity}
-                        onChange={(e) => handleUpdateItem(item.id, 'quantity', parseFloat(e.target.value) || 0)}
+                        value={item.quantity === 0 ? '' : item.quantity}
+                        onChange={(e) => handleUpdateItem(item.id, 'quantity', e.target.value === '' ? 0 : parseFloat(e.target.value))}
                         required
                       />
                     </div>
@@ -166,8 +166,8 @@ export function ItemsStep({ items, setItems, currency, onNext, onPrev }: Props) 
                         type="number"
                         min="0"
                         step="0.01"
-                        value={item.unitPrice}
-                        onChange={(e) => handleUpdateItem(item.id, 'unitPrice', parseFloat(e.target.value) || 0)}
+                        value={item.unitPrice === 0 ? '' : item.unitPrice}
+                        onChange={(e) => handleUpdateItem(item.id, 'unitPrice', e.target.value === '' ? 0 : parseFloat(e.target.value))}
                         required
                       />
                     </div>

@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Wand2, X, Loader2, AlertCircle } from 'lucide-react';
-import { Button } from '../ui/Button';
-import { useAIAssistant } from '../../hooks/useAIAssistant';
+import { Camera, X, Loader2, AlertCircle, Upload, Image as ImageIcon } from 'lucide-react';
+import { Button } from './Button';
+import { usePhotoWizard } from '../../hooks/usePhotoWizard';
 import { AIInvoiceExtraction, InvoiceItem } from '../../schemas/invoice.schema';
 
 interface Props {
@@ -11,21 +11,36 @@ interface Props {
   onApply: (data: { clientName?: string; clientAddress?: string; jobNumber?: string; taxRate?: number; items?: InvoiceItem[] }) => void;
 }
 
-export function AIAssistantModal({ isOpen, onClose, onApply }: Props) {
-  const [prompt, setPrompt] = useState('');
-  const { state, extractInvoiceData, reset } = useAIAssistant();
+export function PhotoWizardModal({ isOpen, onClose, onApply }: Props) {
+  const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  const [mimeType, setMimeType] = useState<string>('');
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const { state, extractFromPhoto, reset } = usePhotoWizard();
 
   useEffect(() => {
     if (isOpen) {
-      setPrompt('');
+      setSelectedImage(null);
+      setMimeType('');
       reset();
     }
   }, [isOpen, reset]);
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!prompt.trim()) return;
-    extractInvoiceData(prompt);
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      const base64String = reader.result as string;
+      setSelectedImage(base64String);
+      setMimeType(file.type);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleExtract = () => {
+    if (!selectedImage || !mimeType) return;
+    extractFromPhoto(selectedImage, mimeType);
   };
 
   const handleApply = (data: AIInvoiceExtraction) => {
@@ -63,18 +78,18 @@ export function AIAssistantModal({ isOpen, onClose, onApply }: Props) {
             initial={{ opacity: 0, y: 100, scale: 0.95 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 100, scale: 0.95 }}
-            className="fixed inset-x-4 bottom-4 md:inset-auto md:top-1/2 md:left-1/2 md:-translate-x-1/2 md:-translate-y-1/2 md:w-full md:max-w-lg bg-white rounded-3xl shadow-2xl z-50 overflow-hidden border border-slate-200"
+            className="fixed inset-x-4 bottom-4 md:inset-auto md:top-1/2 md:left-1/2 md:-translate-x-1/2 md:-translate-y-1/2 md:w-full md:max-w-lg bg-white rounded-3xl shadow-2xl z-50 overflow-hidden border border-slate-200 flex flex-col max-h-[90vh]"
             role="dialog"
             aria-modal="true"
-            aria-labelledby="ai-modal-title"
+            aria-labelledby="photo-modal-title"
           >
-            <div className="p-6">
+            <div className="p-6 overflow-y-auto">
               <div className="flex justify-between items-center mb-6">
                 <div className="flex items-center gap-3 text-indigo-600">
                   <div className="p-2 bg-indigo-50 rounded-xl" aria-hidden="true">
-                    <Wand2 className="w-6 h-6" />
+                    <Camera className="w-6 h-6" />
                   </div>
-                  <h2 id="ai-modal-title" className="text-xl font-bold text-slate-900">Magic Wand</h2>
+                  <h2 id="photo-modal-title" className="text-xl font-bold text-slate-900">Photo Wizard</h2>
                 </div>
                 <button 
                   onClick={onClose} 
@@ -86,29 +101,53 @@ export function AIAssistantModal({ isOpen, onClose, onApply }: Props) {
               </div>
 
               {state.status === 'idle' && (
-                <form onSubmit={handleSubmit} className="space-y-4">
+                <div className="space-y-6">
                   <p className="text-slate-600 text-sm">
-                    Describe the job naturally. We'll extract the client details and line items for you.
+                    Take a picture or upload an image of a document, receipt, or notes. We'll extract the details to pre-fill your invoice.
                   </p>
-                  <label htmlFor="ai-prompt" className="sr-only">Job description</label>
-                  <textarea
-                    id="ai-prompt"
-                    value={prompt}
-                    onChange={(e) => setPrompt(e.target.value)}
-                    placeholder="e.g., I did a deep clean for Sarah at 123 Main St for $300, plus $50 for window cleaning."
-                    className="w-full h-32 p-4 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:outline-none resize-none transition-colors"
-                    autoFocus
+                  
+                  {!selectedImage ? (
+                    <div 
+                      className="border-2 border-dashed border-slate-300 rounded-2xl p-8 text-center hover:bg-slate-50 transition-colors cursor-pointer"
+                      onClick={() => fileInputRef.current?.click()}
+                    >
+                      <ImageIcon className="w-12 h-12 text-slate-400 mx-auto mb-4" />
+                      <p className="text-slate-700 font-medium mb-1">Click to upload or take a photo</p>
+                      <p className="text-slate-500 text-sm">Supports JPG, PNG, WEBP</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      <div className="relative rounded-xl overflow-hidden border border-slate-200 bg-slate-50 flex items-center justify-center h-48">
+                        <img src={selectedImage} alt="Selected document" className="max-h-full max-w-full object-contain" />
+                        <button 
+                          onClick={() => setSelectedImage(null)}
+                          className="absolute top-2 right-2 p-1.5 bg-white/80 backdrop-blur-sm rounded-full text-slate-700 hover:bg-white shadow-sm"
+                          aria-label="Remove image"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+                      <Button className="w-full" onClick={handleExtract}>
+                        Extract Information
+                      </Button>
+                    </div>
+                  )}
+                  
+                  <input 
+                    type="file" 
+                    accept="image/*" 
+                    capture="environment"
+                    className="hidden" 
+                    ref={fileInputRef}
+                    onChange={handleFileChange}
                   />
-                  <Button type="submit" className="w-full" disabled={!prompt.trim()}>
-                    Generate Invoice Data
-                  </Button>
-                </form>
+                </div>
               )}
 
               {state.status === 'loading' && (
                 <div className="py-12 flex flex-col items-center justify-center space-y-4" aria-live="polite">
                   <Loader2 className="w-10 h-10 text-indigo-600 animate-spin" aria-hidden="true" />
-                  <p className="text-slate-600 font-medium animate-pulse">Analyzing your request...</p>
+                  <p className="text-slate-600 font-medium animate-pulse">Analyzing image...</p>
                 </div>
               )}
 
@@ -117,12 +156,12 @@ export function AIAssistantModal({ isOpen, onClose, onApply }: Props) {
                   <div className="p-4 bg-red-50 text-red-900 rounded-xl border border-red-100 flex items-start gap-3">
                     <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" aria-hidden="true" />
                     <div>
-                      <p className="font-semibold mb-1">Could not parse invoice data</p>
+                      <p className="font-semibold mb-1">Could not parse image data</p>
                       <p className="text-sm opacity-90">{state.error instanceof Error ? state.error.message : String(state.error)}</p>
                     </div>
                   </div>
                   <Button variant="secondary" className="w-full" onClick={reset}>
-                    Try Again
+                    Try Another Photo
                   </Button>
                 </div>
               )}
@@ -148,6 +187,9 @@ export function AIAssistantModal({ isOpen, onClose, onApply }: Props) {
                             {item.details && <div className="text-xs opacity-80 mt-0.5">{item.details}</div>}
                           </li>
                         ))}
+                        {(!state.data.items || state.data.items.length === 0) && (
+                          <li className="text-emerald-700/70 italic">No items found</li>
+                        )}
                       </ul>
                     </div>
                   </div>

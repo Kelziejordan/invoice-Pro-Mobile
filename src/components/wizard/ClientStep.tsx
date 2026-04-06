@@ -30,6 +30,10 @@ export function ClientStep({ client, setClient, date, setDate, dueDate, setDueDa
       setError("Due date cannot be before the invoice date.");
       return;
     }
+    if (client.paymentTerms?.toLowerCase().includes('receipt') && dueDate !== date) {
+      setError("Payment terms indicate 'receipt' but the Due Date doesn't match the Invoice Date.");
+      return;
+    }
     setError(null);
     onNext();
   };
@@ -88,6 +92,16 @@ export function ClientStep({ client, setClient, date, setDate, dueDate, setDueDa
                   className="flex w-full rounded-xl border border-slate-200 bg-white px-4 py-2 text-base placeholder:text-slate-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 min-h-[100px] resize-y"
                 />
               </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="jobNumber">Job Number (Optional)</Label>
+                <Input
+                  id="jobNumber"
+                  value={client.jobNumber || ''}
+                  onChange={(e) => setClient({ ...client, jobNumber: e.target.value })}
+                  placeholder="e.g. JOB-2024-001"
+                />
+              </div>
             </CardContent>
           </Card>
         </div>
@@ -117,7 +131,12 @@ export function ClientStep({ client, setClient, date, setDate, dueDate, setDueDa
                     id="dueDate"
                     type="date"
                     value={dueDate}
-                    onChange={(e) => setDueDate(e.target.value)}
+                    onChange={(e) => {
+                      setDueDate(e.target.value);
+                      if (client.paymentTerms?.toLowerCase().includes('receipt') && e.target.value !== date) {
+                        setClient({ ...client, paymentTerms: '' });
+                      }
+                    }}
                     required
                   />
                 </div>
@@ -127,10 +146,34 @@ export function ClientStep({ client, setClient, date, setDate, dueDate, setDueDa
                 <Label htmlFor="paymentTerms">Payment Terms</Label>
                 <Input
                   id="paymentTerms"
-                  value={client.paymentTerms}
-                  onChange={(e) => setClient({ ...client, paymentTerms: e.target.value })}
+                  list="payment-terms-options"
+                  value={client.paymentTerms || ''}
+                  onChange={(e) => {
+                    const terms = e.target.value;
+                    setClient({ ...client, paymentTerms: terms });
+                    
+                    if (!date) return;
+                    const dateObj = new Date(date);
+                    const termsLower = terms.toLowerCase();
+                    
+                    if (termsLower === 'due on receipt' || termsLower === 'payable upon receipt') {
+                      setDueDate(date);
+                    } else if (termsLower === 'net 15') {
+                      dateObj.setDate(dateObj.getDate() + 15);
+                      setDueDate(dateObj.toISOString().split('T')[0]);
+                    } else if (termsLower === 'net 30') {
+                      dateObj.setDate(dateObj.getDate() + 30);
+                      setDueDate(dateObj.toISOString().split('T')[0]);
+                    }
+                  }}
                   placeholder="e.g. Net 30, Due on receipt"
                 />
+                <datalist id="payment-terms-options">
+                  <option value="Due on receipt" />
+                  <option value="Payable upon receipt" />
+                  <option value="Net 15" />
+                  <option value="Net 30" />
+                </datalist>
               </div>
 
               <div className="space-y-2 pt-4 border-t border-slate-100">

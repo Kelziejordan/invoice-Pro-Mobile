@@ -3,16 +3,12 @@ import { GoogleGenAI, Type, Schema } from '@google/genai';
 import { RemoteData, remoteIdle, remoteLoading, remoteSuccess, remoteError } from '../types/remote-data';
 import { AIInvoiceExtraction, AIInvoiceExtractionSchema } from '../schemas/invoice.schema';
 
-// Initialize the Gemini API client
-// Note: In a real production app, this should ideally be called from a backend to protect the API key.
-// For this local-first SPA, we rely on the environment variable injected by the build process.
 const ai = new GoogleGenAI({ apiKey: import.meta.env.VITE_GEMINI_API_KEY || process.env.GEMINI_API_KEY || '' });
 
-export function useAIAssistant() {
+export function usePhotoWizard() {
   const [state, setState] = useState<RemoteData<AIInvoiceExtraction>>(remoteIdle());
   const abortControllerRef = useRef<AbortController | null>(null);
 
-  // Cleanup on unmount
   useEffect(() => {
     return () => {
       if (abortControllerRef.current) {
@@ -21,8 +17,7 @@ export function useAIAssistant() {
     };
   }, []);
 
-  const extractInvoiceData = useCallback(async (prompt: string) => {
-    // Abort any in-flight requests
+  const extractFromPhoto = useCallback(async (base64Image: string, mimeType: string) => {
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
     }
@@ -33,7 +28,6 @@ export function useAIAssistant() {
     setState(remoteLoading());
 
     try {
-      // Define the expected schema for the Gemini API
       const responseSchema: Schema = {
         type: Type.OBJECT,
         properties: {
@@ -60,15 +54,26 @@ export function useAIAssistant() {
 
       const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
-        contents: `Extract invoice details from the following text. If a detail is missing, omit it or use logical defaults (like 1 for quantity).\n\nText: "${prompt}"`,
+        contents: {
+          parts: [
+            {
+              inlineData: {
+                data: base64Image.split(',')[1] || base64Image, // Remove data URI prefix if present
+                mimeType: mimeType,
+              },
+            },
+            {
+              text: "Extract invoice details from this image. If a detail is missing, omit it or use logical defaults (like 1 for quantity).",
+            },
+          ],
+        },
         config: {
           responseMimeType: 'application/json',
           responseSchema: responseSchema,
-          systemInstruction: "You are a highly accurate data extraction assistant for an invoicing application. Extract the requested fields strictly based on the user's input. IMPORTANT FORMATTING RULES: Ensure all text is formatted perfectly as if it were a legal document. Capitalize postal codes properly with a space (e.g., 'T5R 1K1'). Ensure locations have proper commas between city and province/state (e.g., 'Edmonton, Alberta'). Fix any obvious grammatical errors in the user's input.",
+          systemInstruction: "You are a highly accurate data extraction assistant for an invoicing application. Extract the requested fields strictly based on the provided image. IMPORTANT FORMATTING RULES: Ensure all text is formatted perfectly as if it were a legal document. Capitalize postal codes properly with a space (e.g., 'T5R 1K1'). Ensure locations have proper commas between city and province/state (e.g., 'Edmonton, Alberta').",
         }
       });
 
-      // Check if aborted before updating state
       if (abortController.signal.aborted) return;
 
       const responseText = response.text;
@@ -77,8 +82,6 @@ export function useAIAssistant() {
       }
 
       const parsedJson = JSON.parse(responseText);
-      
-      // Mandate 8: Zero-Trust Data Boundaries (Validate AI output)
       const validationResult = AIInvoiceExtractionSchema.safeParse(parsedJson);
 
       if (!validationResult.success) {
@@ -105,7 +108,7 @@ export function useAIAssistant() {
 
   return {
     state,
-    extractInvoiceData,
+    extractFromPhoto,
     reset
   };
 }

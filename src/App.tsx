@@ -7,10 +7,11 @@ import { ClientStep } from './components/wizard/ClientStep';
 import { ItemsStep } from './components/wizard/ItemsStep';
 import { ReviewStep } from './components/wizard/ReviewStep';
 import { AIAssistantModal } from './components/ui/AIAssistantModal';
+import { PhotoWizardModal } from './components/ui/PhotoWizardModal';
 import { Dashboard } from './components/Dashboard';
 import { useOnlineStatus } from './hooks/useOnlineStatus';
-import { Wand2, FileText, CheckCircle2, LayoutDashboard, WifiOff } from 'lucide-react';
-import { InvoiceItem, Invoice } from './schemas/invoice.schema';
+import { Wand2, Camera, FileText, CheckCircle2, LayoutDashboard, WifiOff } from 'lucide-react';
+import { InvoiceItem, Invoice, AIFixExtraction } from './schemas/invoice.schema';
 import { Button } from './components/ui/Button';
 
 function WizardApp() {
@@ -25,14 +26,38 @@ function WizardApp() {
   const wizard = useInvoiceWizard();
   const { savedInvoices, saveInvoice, deleteInvoice } = useSavedInvoices();
   const [isAIModalOpen, setIsAIModalOpen] = useState(false);
+  const [isPhotoModalOpen, setIsPhotoModalOpen] = useState(false);
   const isOnline = useOnlineStatus();
 
-  const handleAIApply = (data: { clientName?: string; clientAddress?: string; taxRate?: number; items?: InvoiceItem[] }) => {
-    if (data.clientName || data.clientAddress || data.taxRate !== undefined) {
+  const handleAIFixApply = (fixes: AIFixExtraction) => {
+    if (fixes.client) {
+      wizard.setClient({
+        ...wizard.client,
+        ...fixes.client,
+      });
+    }
+    if (fixes.items && fixes.items.length > 0) {
+      const mappedItems = fixes.items.map(item => ({
+        id: crypto.randomUUID(),
+        ...item
+      }));
+      wizard.setItems(mappedItems);
+    }
+    if (fixes.date) {
+      wizard.setDate(fixes.date);
+    }
+    if (fixes.dueDate) {
+      wizard.setDueDate(fixes.dueDate);
+    }
+  };
+
+  const handleAIApply = (data: { clientName?: string; clientAddress?: string; jobNumber?: string; taxRate?: number; items?: InvoiceItem[] }) => {
+    if (data.clientName || data.clientAddress || data.jobNumber || data.taxRate !== undefined) {
       wizard.setClient({
         ...wizard.client,
         clientName: data.clientName || wizard.client.clientName,
         clientAddress: data.clientAddress || wizard.client.clientAddress,
+        jobNumber: data.jobNumber || wizard.client.jobNumber,
         taxRate: data.taxRate !== undefined ? data.taxRate : wizard.client.taxRate,
       });
     }
@@ -101,17 +126,30 @@ function WizardApp() {
           
           <div className="flex items-center gap-2">
             {view === 'wizard' && wizard.step !== 'review' && (
-              <Button 
-                variant="outline" 
-                size="sm" 
-                onClick={() => setIsAIModalOpen(true)}
-                disabled={!isOnline}
-                title={!isOnline ? "AI features require an internet connection" : "Extract details with AI"}
-                className="text-indigo-600 border-indigo-200 hover:bg-indigo-50 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <Wand2 className="w-4 h-4 mr-2" aria-hidden="true" />
-                <span className="hidden sm:inline">Magic Wand</span>
-              </Button>
+              <>
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={() => setIsPhotoModalOpen(true)}
+                  disabled={!isOnline}
+                  title={!isOnline ? "AI features require an internet connection" : "Extract details from a photo"}
+                  className="text-indigo-600 border-indigo-200 hover:bg-indigo-50 disabled:opacity-50 disabled:cursor-not-allowed px-2 sm:px-3"
+                >
+                  <Camera className="w-4 h-4 sm:mr-2" aria-hidden="true" />
+                  <span className="hidden sm:inline">Photo</span>
+                </Button>
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={() => setIsAIModalOpen(true)}
+                  disabled={!isOnline}
+                  title={!isOnline ? "AI features require an internet connection" : "Extract details with AI"}
+                  className="text-indigo-600 border-indigo-200 hover:bg-indigo-50 disabled:opacity-50 disabled:cursor-not-allowed px-2 sm:px-3"
+                >
+                  <Wand2 className="w-4 h-4 sm:mr-2" aria-hidden="true" />
+                  <span className="hidden sm:inline">Magic Wand</span>
+                </Button>
+              </>
             )}
             {view === 'wizard' && (
               <Button 
@@ -211,6 +249,7 @@ function WizardApp() {
                   invoice={wizard.getFullInvoice()} 
                   onPrev={wizard.prevStep} 
                   onNew={handleNewInvoice} 
+                  onApplyFixes={handleAIFixApply}
                 />
                 <div className="w-full max-w-3xl mx-auto flex justify-end print:hidden">
                   <Button onClick={handleSaveInvoice} size="lg" className="w-full sm:w-auto">
@@ -226,6 +265,11 @@ function WizardApp() {
       <AIAssistantModal 
         isOpen={isAIModalOpen} 
         onClose={() => setIsAIModalOpen(false)} 
+        onApply={handleAIApply} 
+      />
+      <PhotoWizardModal 
+        isOpen={isPhotoModalOpen} 
+        onClose={() => setIsPhotoModalOpen(false)} 
         onApply={handleAIApply} 
       />
     </div>

@@ -1,6 +1,6 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Invoice } from '../../schemas/invoice.schema';
+import { AIAudit, AIAuditSchema, Invoice, AIFixExtraction } from '../../schemas/invoice.schema';
 import { Button } from '../ui/Button';
 import { Card, CardContent } from '../ui/Card';
 import { formatCurrency } from '../../utils/currency';
@@ -17,15 +17,17 @@ interface Props {
   invoice: Invoice;
   onPrev: () => void;
   onNew: () => void;
+  onApplyFixes: (fixes: AIFixExtraction) => void;
 }
 
-function ReviewStepContent({ invoice, onPrev, onNew }: Props) {
+function ReviewStepContent({ invoice, onPrev, onNew, onApplyFixes }: Props) {
   const invoiceRef = useRef<HTMLDivElement>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const isOnline = useOnlineStatus();
   const [isAuditModalOpen, setIsAuditModalOpen] = useState(isOnline);
-  const { auditState, auditInvoice } = useAIAudit();
+  const [fixInstructions, setFixInstructions] = useState('');
+  const { auditState, fixState, auditInvoice, fixInvoice, resetAudit } = useAIAudit();
 
   // Trigger audit on mount
   useEffect(() => {
@@ -38,7 +40,23 @@ function ReviewStepContent({ invoice, onPrev, onNew }: Props) {
 
   const handleCloseAudit = () => {
     setIsAuditModalOpen(false);
+    resetAudit();
   };
+
+  const handleFixSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!fixInstructions.trim()) return;
+    fixInvoice(invoice, fixInstructions);
+  };
+
+  // Watch for successful fix
+  useEffect(() => {
+    if (fixState.status === 'success') {
+      onApplyFixes(fixState.data);
+      setFixInstructions('');
+      resetAudit(); // This will trigger a re-audit since auditState becomes idle
+    }
+  }, [fixState, onApplyFixes, resetAudit]);
 
   const subtotal = calculateSubtotal(invoice.items);
   const tax = calculateTax(subtotal, invoice.client.taxRate);
@@ -148,6 +166,39 @@ function ReviewStepContent({ invoice, onPrev, onNew }: Props) {
                   </div>
                 )}
 
+                {fixState.status === 'loading' && (
+                  <div className="py-12 flex flex-col items-center justify-center space-y-6 text-center" aria-live="polite">
+                    <div className="relative">
+                      <div className="absolute inset-0 bg-indigo-100 rounded-full animate-ping opacity-75"></div>
+                      <div className="relative bg-indigo-50 p-4 rounded-full">
+                        <Sparkles className="w-8 h-8 text-indigo-600 animate-pulse" aria-hidden="true" />
+                      </div>
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-semibold text-slate-900 mb-2">Applying fixes...</h3>
+                      <p className="text-slate-500 text-sm max-w-[250px] mx-auto">Updating your invoice with the requested changes.</p>
+                    </div>
+                  </div>
+                )}
+
+                {fixState.status === 'error' && (
+                  <div className="py-6 space-y-6 text-center" aria-live="assertive">
+                    <div className="inline-flex bg-red-50 p-4 rounded-full mb-2">
+                      <AlertTriangle className="w-8 h-8 text-red-600" aria-hidden="true" />
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-semibold text-slate-900 mb-2">Fix Failed</h3>
+                      <p className="text-slate-500 text-sm mb-2">We couldn't apply the fixes at this time.</p>
+                      <p className="text-red-500 text-xs font-mono bg-red-50 p-2 rounded-lg inline-block max-w-full overflow-hidden text-ellipsis whitespace-nowrap" title={fixState.error.message}>
+                        {fixState.error.message}
+                      </p>
+                    </div>
+                    <Button variant="secondary" className="w-full" onClick={resetAudit}>
+                      Back to Audit
+                    </Button>
+                  </div>
+                )}
+
                 {auditState.status === 'error' && (
                   <div className="py-6 space-y-6 text-center" aria-live="assertive">
                     <div className="inline-flex bg-red-50 p-4 rounded-full mb-2">
@@ -166,7 +217,7 @@ function ReviewStepContent({ invoice, onPrev, onNew }: Props) {
                   </div>
                 )}
 
-                {auditState.status === 'success' && (
+                {auditState.status === 'success' && fixState.status === 'idle' && (
                   <div className="space-y-6" aria-live="polite">
                     {auditState.data.isPerfect ? (
                       <div className="text-center py-6 space-y-6">
@@ -213,8 +264,30 @@ function ReviewStepContent({ invoice, onPrev, onNew }: Props) {
                             )}
                           </div>
                         </div>
-                        <Button className="w-full" onClick={handleCloseAudit}>
-                          Acknowledge & Continue
+
+                        <div className="bg-indigo-50 border border-indigo-100 rounded-2xl p-5">
+                          <h4 className="text-sm font-bold text-indigo-900 mb-2 flex items-center gap-2">
+                            <Sparkles className="w-4 h-4" /> Fix with AI
+                          </h4>
+                          <p className="text-xs text-indigo-700 mb-3">
+                            Tell the AI what's missing (e.g., "The client address is 123 Main St" or "Add a 5% tax rate").
+                          </p>
+                          <form onSubmit={handleFixSubmit} className="flex gap-2">
+                            <input
+                              type="text"
+                              value={fixInstructions}
+                              onChange={(e) => setFixInstructions(e.target.value)}
+                              placeholder="Type your fixes here..."
+                              className="flex-1 rounded-lg border border-indigo-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                            />
+                            <Button type="submit" disabled={!fixInstructions.trim()} size="sm" className="bg-indigo-600 hover:bg-indigo-700">
+                              Fix
+                            </Button>
+                          </form>
+                        </div>
+
+                        <Button className="w-full" variant="outline" onClick={handleCloseAudit}>
+                          Acknowledge & Continue Anyway
                         </Button>
                       </div>
                     )}
@@ -287,10 +360,20 @@ function ReviewStepContent({ invoice, onPrev, onNew }: Props) {
                 <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
                   <span className="text-slate-500 font-medium">Invoice No:</span>
                   <span className="text-slate-900 font-semibold">{invoice.invoiceNumber}</span>
+                  {invoice.client.jobNumber && (
+                    <>
+                      <span className="text-slate-500 font-medium">Job No:</span>
+                      <span className="text-slate-900 font-semibold">{invoice.client.jobNumber}</span>
+                    </>
+                  )}
                   <span className="text-slate-500 font-medium">Date:</span>
                   <span className="text-slate-900">{formatDate(invoice.date)}</span>
-                  <span className="text-slate-500 font-medium">Due Date:</span>
-                  <span className="text-slate-900">{formatDate(invoice.dueDate)}</span>
+                  <span className="text-slate-500 font-medium">Due:</span>
+                  <span className="text-slate-900">
+                    {invoice.client.paymentTerms?.toLowerCase().includes('receipt') 
+                      ? 'On Receipt' 
+                      : formatDate(invoice.dueDate)}
+                  </span>
                 </div>
               </div>
             </div>
