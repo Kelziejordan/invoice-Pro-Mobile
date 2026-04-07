@@ -6,11 +6,34 @@ import { AIInvoiceExtraction, AIInvoiceExtractionSchema } from '../schemas/invoi
 // Initialize the Gemini API client
 // Note: In a real production app, this should ideally be called from a backend to protect the API key.
 // For this local-first SPA, we rely on the environment variable injected by the build process.
-const ai = new GoogleGenAI({ apiKey: import.meta.env.VITE_GEMINI_API_KEY || process.env.GEMINI_API_KEY || '' });
+const getAIClient = () => {
+  let apiKey = '';
+  try {
+    apiKey = process.env.GEMINI_API_KEY || '';
+  } catch (e) {
+    // Ignore
+  }
+  if (!apiKey) {
+    try {
+      apiKey = (import.meta as any).env?.VITE_GEMINI_API_KEY || '';
+    } catch (e) {
+      // Ignore
+    }
+  }
+  return new GoogleGenAI({ apiKey });
+};
 
 export function useAIAssistant() {
+  const aiRef = useRef<GoogleGenAI | null>(null);
   const [state, setState] = useState<RemoteData<AIInvoiceExtraction>>(remoteIdle());
   const abortControllerRef = useRef<AbortController | null>(null);
+
+  const getAI = () => {
+    if (!aiRef.current) {
+      aiRef.current = getAIClient();
+    }
+    return aiRef.current;
+  };
 
   // Cleanup on unmount
   useEffect(() => {
@@ -58,7 +81,7 @@ export function useAIAssistant() {
         }
       };
 
-      const response = await ai.models.generateContent({
+      const response = await getAI().models.generateContent({
         model: 'gemini-3-flash-preview',
         contents: `Extract invoice details from the following text. If a detail is missing, omit it or use logical defaults (like 1 for quantity).\n\nText: "${prompt}"`,
         config: {

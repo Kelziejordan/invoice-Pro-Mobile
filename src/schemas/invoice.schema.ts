@@ -4,7 +4,7 @@ export const InvoiceItemSchema = z.object({
   id: z.string().uuid(),
   description: z.string().min(1, "Description is required"),
   details: z.string().optional(),
-  quantity: z.number().min(0, "Quantity must be positive"),
+  quantity: z.union([z.number().min(0), z.string()]),
   unitPrice: z.number().min(0, "Unit price must be positive"),
 });
 
@@ -54,36 +54,9 @@ export const AIInvoiceExtractionSchema = z.object({
   items: z.array(z.object({
     description: z.string(),
     details: z.string().optional(),
-    quantity: z.number(),
+    quantity: z.union([z.number(), z.string()]),
     unitPrice: z.number(),
   })).optional(),
-});
-
-export const AIFixExtractionSchema = z.object({
-  client: z.object({
-    clientName: z.string().optional(),
-    clientEmail: z.string().optional(),
-    clientAddress: z.string().optional(),
-    jobNumber: z.string().optional(),
-    taxRate: z.number().optional(),
-    discount: z.number().optional(),
-    paymentTerms: z.string().optional(),
-    notes: z.string().optional(),
-  }).optional(),
-  items: z.array(z.object({
-    description: z.string(),
-    details: z.string().optional(),
-    quantity: z.number(),
-    unitPrice: z.number(),
-  })).optional(),
-  date: z.string().optional(),
-  dueDate: z.string().optional(),
-});
-
-export const AIAuditSchema = z.object({
-  isPerfect: z.boolean(),
-  warnings: z.array(z.string()),
-  suggestions: z.array(z.string()),
 });
 
 export type InvoiceItem = z.infer<typeof InvoiceItemSchema>;
@@ -91,6 +64,4 @@ export type Profile = z.infer<typeof ProfileSchema>;
 export type Client = z.infer<typeof ClientSchema>;
 export type Invoice = z.infer<typeof InvoiceSchema>;
 export type AIInvoiceExtraction = z.infer<typeof AIInvoiceExtractionSchema>;
-export type AIFixExtraction = z.infer<typeof AIFixExtractionSchema>;
-export type AIAudit = z.infer<typeof AIAuditSchema>;
 export type InvoiceConfig = z.infer<typeof InvoiceConfigSchema>;

@@ -3,11 +3,34 @@ import { GoogleGenAI, Type, Schema } from '@google/genai';
 import { RemoteData, remoteIdle, remoteLoading, remoteSuccess, remoteError } from '../types/remote-data';
 import { AIInvoiceExtraction, AIInvoiceExtractionSchema } from '../schemas/invoice.schema';
 
-const ai = new GoogleGenAI({ apiKey: import.meta.env.VITE_GEMINI_API_KEY || process.env.GEMINI_API_KEY || '' });
+const getAIClient = () => {
+  let apiKey = '';
+  try {
+    apiKey = process.env.GEMINI_API_KEY || '';
+  } catch (e) {
+    // Ignore
+  }
+  if (!apiKey) {
+    try {
+      apiKey = (import.meta as any).env?.VITE_GEMINI_API_KEY || '';
+    } catch (e) {
+      // Ignore
+    }
+  }
+  return new GoogleGenAI({ apiKey });
+};
 
 export function usePhotoWizard() {
+  const aiRef = useRef<GoogleGenAI | null>(null);
   const [state, setState] = useState<RemoteData<AIInvoiceExtraction>>(remoteIdle());
   const abortControllerRef = useRef<AbortController | null>(null);
+
+  const getAI = () => {
+    if (!aiRef.current) {
+      aiRef.current = getAIClient();
+    }
+    return aiRef.current;
+  };
 
   useEffect(() => {
     return () => {
@@ -52,7 +75,7 @@ export function usePhotoWizard() {
         }
       };
 
-      const response = await ai.models.generateContent({
+      const response = await getAI().models.generateContent({
         model: 'gemini-3-flash-preview',
         contents: {
           parts: [

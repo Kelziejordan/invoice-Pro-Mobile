@@ -1,12 +1,16 @@
 import { InvoiceItem } from '../schemas/invoice.schema';
 
+export function getItemAmount(item: InvoiceItem): number {
+  const qty = typeof item.quantity === 'string' 
+    ? (isNaN(Number(item.quantity)) ? 1 : Number(item.quantity)) 
+    : (Number(item.quantity) || 0);
+  const price = Number(item.unitPrice) || 0;
+  return qty * price;
+}
+
 export function calculateSubtotal(items: InvoiceItem[]): number {
   if (!Array.isArray(items)) return 0;
-  return items.reduce((sum, item) => {
-    const qty = Number(item.quantity) || 0;
-    const price = Number(item.unitPrice) || 0;
-    return sum + (qty * price);
-  }, 0);
+  return items.reduce((sum, item) => sum + getItemAmount(item), 0);
 }
 
 export function calculateTax(subtotal: number, taxRate: number): number {

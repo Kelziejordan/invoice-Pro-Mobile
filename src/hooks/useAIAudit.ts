@@ -3,12 +3,35 @@ import { GoogleGenAI, Type, Schema } from '@google/genai';
 import { RemoteData, remoteIdle, remoteLoading, remoteSuccess, remoteError } from '../types/remote-data';
 import { AIAudit, AIAuditSchema, Invoice, AIFixExtraction, AIFixExtractionSchema } from '../schemas/invoice.schema';
 
-const ai = new GoogleGenAI({ apiKey: import.meta.env.VITE_GEMINI_API_KEY || process.env.GEMINI_API_KEY || '' });
+const getAIClient = () => {
+  let apiKey = '';
+  try {
+    apiKey = process.env.GEMINI_API_KEY || '';
+  } catch (e) {
+    // Ignore
+  }
+  if (!apiKey) {
+    try {
+      apiKey = (import.meta as any).env?.VITE_GEMINI_API_KEY || '';
+    } catch (e) {
+      // Ignore
+    }
+  }
+  return new GoogleGenAI({ apiKey });
+};
 
 export function useAIAudit() {
+  const aiRef = useRef<GoogleGenAI | null>(null);
   const [auditState, setAuditState] = useState<RemoteData<AIAudit>>(remoteIdle());
   const [fixState, setFixState] = useState<RemoteData<AIFixExtraction>>(remoteIdle());
   const abortControllerRef = useRef<AbortController | null>(null);
+
+  const getAI = () => {
+    if (!aiRef.current) {
+      aiRef.current = getAIClient();
+    }
+    return aiRef.current;
+  };
 
   useEffect(() => {
     return () => {
@@ -57,7 +80,7 @@ export function useAIAudit() {
       });
 
       const response = await Promise.race([
-        ai.models.generateContent({
+        getAI().models.generateContent({
           model: 'gemini-3-flash-preview',
           contents: `Audit this invoice JSON for logical errors, missing critical business information, or inconsistencies. For example, check if 'due on receipt' matches the due date, if totals make sense, if contact info is missing, etc.\n\nInvoice JSON:\n${JSON.stringify(cleanInvoice, null, 2)}`,
           config: {
@@ -159,7 +182,7 @@ export function useAIAudit() {
       });
 
       const response = await Promise.race([
-        ai.models.generateContent({
+        getAI().models.generateContent({
           model: 'gemini-3-flash-preview',
           contents: `Here is the current invoice JSON:\n${JSON.stringify(cleanInvoice, null, 2)}\n\nThe user wants to apply the following fixes or additions based on the audit: "${instructions}".\n\nReturn the updated client details, items, date, and dueDate. Only include the fields that need to be updated or the full updated objects.`,
           config: {

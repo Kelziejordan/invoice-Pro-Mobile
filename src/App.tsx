@@ -11,7 +11,7 @@ import { PhotoWizardModal } from './components/ui/PhotoWizardModal';
 import { Dashboard } from './components/Dashboard';
 import { useOnlineStatus } from './hooks/useOnlineStatus';
 import { Wand2, Camera, FileText, CheckCircle2, LayoutDashboard, WifiOff } from 'lucide-react';
-import { InvoiceItem, Invoice, AIFixExtraction } from './schemas/invoice.schema';
+import { InvoiceItem, Invoice } from './schemas/invoice.schema';
 import { Button } from './components/ui/Button';
 
 function WizardApp() {
@@ -28,28 +28,6 @@ function WizardApp() {
   const [isAIModalOpen, setIsAIModalOpen] = useState(false);
   const [isPhotoModalOpen, setIsPhotoModalOpen] = useState(false);
   const isOnline = useOnlineStatus();
-
-  const handleAIFixApply = (fixes: AIFixExtraction) => {
-    if (fixes.client) {
-      wizard.setClient({
-        ...wizard.client,
-        ...fixes.client,
-      });
-    }
-    if (fixes.items && fixes.items.length > 0) {
-      const mappedItems = fixes.items.map(item => ({
-        id: crypto.randomUUID(),
-        ...item
-      }));
-      wizard.setItems(mappedItems);
-    }
-    if (fixes.date) {
-      wizard.setDate(fixes.date);
-    }
-    if (fixes.dueDate) {
-      wizard.setDueDate(fixes.dueDate);
-    }
-  };
 
   const handleAIApply = (data: { clientName?: string; clientAddress?: string; jobNumber?: string; taxRate?: number; items?: InvoiceItem[] }) => {
     if (data.clientName || data.clientAddress || data.jobNumber || data.taxRate !== undefined) {
@@ -249,7 +227,6 @@ function WizardApp() {
                   invoice={wizard.getFullInvoice()} 
                   onPrev={wizard.prevStep} 
                   onNew={handleNewInvoice} 
-                  onApplyFixes={handleAIFixApply}
                 />
                 <div className="w-full max-w-3xl mx-auto flex justify-end print:hidden">
                   <Button onClick={handleSaveInvoice} size="lg" className="w-full sm:w-auto">

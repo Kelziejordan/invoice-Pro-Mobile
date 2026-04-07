@@ -6,6 +6,7 @@ import { Label } from '../ui/Label';
 import { Card, CardContent } from '../ui/Card';
 import { Plus, Trash2, GripVertical, ChevronUp, ChevronDown } from 'lucide-react';
 import { formatCurrency } from '../../utils/currency';
+import { calculateSubtotal } from '../../utils/calculations';
 
 interface Props {
   items: InvoiceItem[];
@@ -78,7 +79,7 @@ export function ItemsStep({ items, setItems, currency, onNext, onPrev }: Props) 
     onNext();
   };
 
-  const subtotal = items.reduce((sum, item) => sum + (item.quantity * item.unitPrice), 0);
+  const subtotal = calculateSubtotal(items);
 
   return (
     <form onSubmit={handleSubmit} className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -150,11 +151,14 @@ export function ItemsStep({ items, setItems, currency, onNext, onPrev }: Props) 
                       <Label htmlFor={`qty-${item.id}`}>Qty</Label>
                       <Input
                         id={`qty-${item.id}`}
-                        type="number"
-                        min="0"
-                        step="0.01"
+                        type="text"
                         value={item.quantity === 0 ? '' : item.quantity}
-                        onChange={(e) => handleUpdateItem(item.id, 'quantity', e.target.value === '' ? 0 : parseFloat(e.target.value))}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          const num = Number(val);
+                          handleUpdateItem(item.id, 'quantity', val === '' ? '' : (isNaN(num) ? val : num));
+                        }}
+                        placeholder="1, N/A..."
                         required
                       />
                     </div>
