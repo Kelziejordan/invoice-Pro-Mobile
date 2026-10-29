@@ -19,9 +19,9 @@ export const ProfileSchema = z.object({
   phone: z.string().optional(),
   address: z.string().optional(),
   gstNumber: z.string().optional(),
-  logo: z.string().optional(), // base64 string
-  currency: z.string().default('USD'),
-  taxLabel: z.string().default('Tax'),
+  logo: z.string().optional(),
+  currency: z.string().default('CAD'),
+  taxLabel: z.string().default('GST'),
   invoiceConfig: InvoiceConfigSchema.default({ prefix: 'INV-', nextNumber: 1001 }),
 });
 
@@ -30,7 +30,7 @@ export const ClientSchema = z.object({
   clientEmail: z.string().email("Invalid email").optional().or(z.literal('')),
   clientAddress: z.string().optional(),
   jobNumber: z.string().optional(),
-  taxRate: z.number().min(0).max(100).default(0),
+  taxRate: z.number().min(0).max(100).default(5),
   discount: z.number().min(0).default(0),
   paymentTerms: z.string().optional(),
   notes: z.string().optional(),
