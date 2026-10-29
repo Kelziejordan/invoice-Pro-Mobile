@@ -14,8 +14,8 @@ const defaultProfile: Profile = {
   address: '',
   gstNumber: '',
   logo: '',
-  currency: 'USD',
-  taxLabel: 'Tax',
+  currency: 'CAD',
+  taxLabel: 'GST',
   invoiceConfig: { prefix: 'INV-', nextNumber: 1001 }
 };
 
@@ -23,7 +23,7 @@ const defaultClient: Client = {
   clientName: '',
   clientEmail: '',
   clientAddress: '',
-  taxRate: 0,
+  taxRate: 5,
   discount: 0,
   paymentTerms: 'Due on receipt',
   notes: 'Thank you for your business!'
@@ -31,15 +31,15 @@ const defaultClient: Client = {
 
 function getInitialProfile(): Profile {
   if (typeof window === 'undefined') return defaultProfile;
-  const stored = localStorage.getItem(PROFILE_STORAGE_KEY);
-  if (stored) {
-    try {
+  try {
+    const stored = localStorage.getItem(PROFILE_STORAGE_KEY);
+    if (stored) {
       const parsed = JSON.parse(stored);
       const validation = ProfileSchema.safeParse(parsed);
       if (validation.success) return validation.data;
-    } catch (e) {
-      console.error('Failed to parse profile', e);
     }
+  } catch (error) {
+    console.error('Failed to load business profile from local storage.', error);
   }
   return defaultProfile;
 }
@@ -50,8 +50,8 @@ function getInitialDraft() {
   if (stored) {
     try {
       return JSON.parse(stored);
-    } catch (e) {
-      console.error('Failed to parse draft', e);
+    } catch (error) {
+      console.error('Failed to parse draft', error);
     }
   }
   return null;
@@ -59,7 +59,7 @@ function getInitialDraft() {
 
 export function useInvoiceWizard() {
   const [initialDraft] = useState(getInitialDraft);
-  
+
   const [step, setStep] = useState<WizardStep>(initialDraft?.step || 'profile');
   const [profile, setProfile] = useState<Profile>(getInitialProfile);
   const [client, setClient] = useState<Client>(initialDraft?.client || defaultClient);
@@ -69,15 +69,21 @@ export function useInvoiceWizard() {
   const [invoiceNumber, setInvoiceNumber] = useState<string>(initialDraft?.invoiceNumber || '');
   const [draftId, setDraftId] = useState<string>(initialDraft?.draftId || crypto.randomUUID());
 
-  // Save profile whenever it changes
   useEffect(() => {
-    localStorage.setItem(PROFILE_STORAGE_KEY, JSON.stringify(profile));
+    try {
+      localStorage.setItem(PROFILE_STORAGE_KEY, JSON.stringify(profile));
+    } catch (error) {
+      console.error('Failed to save business profile. Export a backup and check device storage.', error);
+    }
   }, [profile]);
 
-  // Save draft whenever relevant state changes
   useEffect(() => {
     const draft = { client, items, date, dueDate, invoiceNumber, draftId, step };
-    localStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(draft));
+    try {
+      localStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(draft));
+    } catch (error) {
+      console.error('Failed to save invoice draft. Export existing invoices and check device storage.', error);
+    }
   }, [client, items, date, dueDate, invoiceNumber, draftId, step]);
 
   const currentInvoiceNumber = invoiceNumber || `${profile.invoiceConfig.prefix}${profile.invoiceConfig.nextNumber}`;
@@ -100,30 +106,29 @@ export function useInvoiceWizard() {
     });
   }, []);
 
-  const getFullInvoice = useCallback((): Invoice => {
-    return {
-      id: draftId,
-      invoiceNumber: currentInvoiceNumber,
-      date,
-      dueDate,
-      profile,
-      client,
-      items,
-    };
-  }, [draftId, currentInvoiceNumber, date, dueDate, profile, client, items]);
+  const getFullInvoice = useCallback((): Invoice => ({
+    id: draftId,
+    invoiceNumber: currentInvoiceNumber,
+    date,
+    dueDate,
+    profile,
+    client,
+    items,
+  }), [draftId, currentInvoiceNumber, date, dueDate, profile, client, items]);
 
   const incrementInvoiceSequence = useCallback(() => {
     setProfile(prev => ({
       ...prev,
-      invoiceConfig: {
-        ...prev.invoiceConfig,
-        nextNumber: prev.invoiceConfig.nextNumber + 1
-      }
+      invoiceConfig: { ...prev.invoiceConfig, nextNumber: prev.invoiceConfig.nextNumber + 1 }
     }));
   }, []);
 
   const clearDraft = useCallback(() => {
-    localStorage.removeItem(DRAFT_STORAGE_KEY);
+    try {
+      localStorage.removeItem(DRAFT_STORAGE_KEY);
+    } catch (error) {
+      console.error('Failed to clear invoice draft from local storage.', error);
+    }
   }, []);
 
   const resetDraft = useCallback(() => {
