@@ -3,6 +3,7 @@ import { Invoice, InvoiceSchema, Profile, ProfileSchema } from '../schemas/invoi
 
 export const PROFILE_STORAGE_KEY = 'proinvoice_user_profile';
 export const INVOICES_STORAGE_KEY = 'proinvoice_history';
+export const DRAFT_STORAGE_KEY = 'proinvoice_draft';
 
 const BackupSchema = z.object({
   format: z.literal('invoice-pro-backup'),
@@ -45,16 +46,22 @@ export function restoreBackup(backup: InvoiceBackup, storage: StoragePort): void
   const validated = BackupSchema.parse(backup);
   const previousProfile = storage.getItem(PROFILE_STORAGE_KEY);
   const previousInvoices = storage.getItem(INVOICES_STORAGE_KEY);
+  const previousDraft = storage.getItem(DRAFT_STORAGE_KEY);
 
   try {
     storage.setItem(PROFILE_STORAGE_KEY, JSON.stringify(validated.profile));
     storage.setItem(INVOICES_STORAGE_KEY, JSON.stringify(validated.invoices));
+    // A draft may refer to the old business profile or invoice numbering; do not
+    // silently mix it with restored canonical data.
+    storage.removeItem(DRAFT_STORAGE_KEY);
   } catch {
     try {
       if (previousProfile === null) storage.removeItem(PROFILE_STORAGE_KEY);
       else storage.setItem(PROFILE_STORAGE_KEY, previousProfile);
       if (previousInvoices === null) storage.removeItem(INVOICES_STORAGE_KEY);
       else storage.setItem(INVOICES_STORAGE_KEY, previousInvoices);
+      if (previousDraft === null) storage.removeItem(DRAFT_STORAGE_KEY);
+      else storage.setItem(DRAFT_STORAGE_KEY, previousDraft);
     } catch {
       throw new Error('Restore failed and rollback could not be completed. Do not close this app; export any remaining data before retrying.');
     }
