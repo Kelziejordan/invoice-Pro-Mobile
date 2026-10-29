@@ -13,6 +13,7 @@ import { useOnlineStatus } from './hooks/useOnlineStatus';
 import { Wand2, Camera, FileText, CheckCircle2, LayoutDashboard, WifiOff } from 'lucide-react';
 import { InvoiceItem, Invoice } from './schemas/invoice.schema';
 import { Button } from './components/ui/Button';
+import { BackupControls } from './components/BackupControls';
 
 function WizardApp() {
   const [view, setView] = useState<'dashboard' | 'wizard'>(() => {
@@ -183,14 +184,17 @@ function WizardApp() {
       {/* Main Content Area */}
       <main className="flex-1 p-4 sm:p-6 md:p-8 print:p-0">
         {view === 'dashboard' ? (
-          <Dashboard 
-            invoices={savedInvoices} 
-            onNewInvoice={handleNewInvoice} 
-            onEditInvoice={handleEditInvoice} 
-            onDeleteInvoice={deleteInvoice} 
-            hasDraft={wizard.hasDraft}
-            onResumeDraft={handleResumeDraft}
-          />
+          <div className="max-w-5xl mx-auto space-y-6">
+            <BackupControls profile={wizard.profile} invoices={savedInvoices} />
+            <Dashboard 
+              invoices={savedInvoices} 
+              onNewInvoice={handleNewInvoice} 
+              onEditInvoice={handleEditInvoice} 
+              onDeleteInvoice={deleteInvoice} 
+              hasDraft={wizard.hasDraft}
+              onResumeDraft={handleResumeDraft}
+            />
+          </div>
         ) : (
           <div className={`max-w-5xl mx-auto ${wizard.step === 'review' ? 'print:visible' : ''}`}>
             {wizard.step === 'profile' && (
