@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { calculateSubtotal, calculateTax, calculateTotal, getItemAmount } from '../src/utils/calculations';
 import { formatDate } from '../src/utils/date';
-import { createBackup, parseBackup, restoreBackup, PROFILE_STORAGE_KEY, INVOICES_STORAGE_KEY } from '../src/utils/backup';
+import { createBackup, parseBackup, restoreBackup, PROFILE_STORAGE_KEY, INVOICES_STORAGE_KEY, DRAFT_STORAGE_KEY } from '../src/utils/backup';
 import { Invoice, Profile } from '../src/schemas/invoice.schema';
 
 const profile: Profile = {
@@ -75,10 +75,25 @@ test('rejects malformed and unsupported backup versions', () => {
   assert.throws(() => parseBackup(JSON.stringify({ format: 'invoice-pro-backup', version: 99 })), /unsupported version/);
 });
 
-test('restore rolls back existing data if the second write fails', () => {
+test('restore replaces profile and invoices and clears the stale draft', () => {
+  const values = new Map<string, string>([[DRAFT_STORAGE_KEY, JSON.stringify({ old: 'draft' })]]);
+  const storage = {
+    getItem: (key: string) => values.get(key) ?? null,
+    setItem: (key: string, value: string) => { values.set(key, value); },
+    removeItem: (key: string) => { values.delete(key); },
+  };
+  const backup = createBackup(profile, [invoice], '2026-10-29T12:00:00.000Z');
+  restoreBackup(backup, storage);
+  assert.equal(JSON.parse(values.get(PROFILE_STORAGE_KEY)!).currency, 'CAD');
+  assert.equal(JSON.parse(values.get(INVOICES_STORAGE_KEY)!)[0].invoiceNumber, 'INV-1001');
+  assert.equal(values.has(DRAFT_STORAGE_KEY), false);
+});
+
+test('restore rolls back existing data if the invoice write fails', () => {
   const initial = new Map<string, string>([
     [PROFILE_STORAGE_KEY, JSON.stringify({ old: 'profile' })],
     [INVOICES_STORAGE_KEY, JSON.stringify([{ old: 'invoice' }])],
+    [DRAFT_STORAGE_KEY, JSON.stringify({ old: 'draft' })],
   ]);
   let failOnce = true;
   const storage = {
@@ -96,4 +111,5 @@ test('restore rolls back existing data if the second write fails', () => {
   assert.throws(() => restoreBackup(backup, storage), /Existing data was preserved/);
   assert.deepEqual(JSON.parse(initial.get(PROFILE_STORAGE_KEY)!), { old: 'profile' });
   assert.deepEqual(JSON.parse(initial.get(INVOICES_STORAGE_KEY)!), [{ old: 'invoice' }]);
+  assert.deepEqual(JSON.parse(initial.get(DRAFT_STORAGE_KEY)!), { old: 'draft' });
 });
