@@ -1,0 +1,30 @@
+name: Invoice Pro CI
+
+on:
+  pull_request:
+  push:
+    branches: [main, preview]
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci
+      - name: Run TypeScript checks
+        run: npm run lint
+      - name: Run invoice core regression tests
+        run: npm test
+      - name: Build production PWA
+        run: npm run build
